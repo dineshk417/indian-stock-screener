@@ -25,7 +25,7 @@ _STRATEGY_COLORS = {
 from ui.charts import candlestick_chart, rsi_macd_chart
 from config.stock_universe import NIFTY_50, NIFTY_200
 
-st.set_page_config(page_title="Swing Trades", layout="wide", page_icon="💹")
+st.set_page_config(page_title="Swing Trades · ShareSaathi", layout="wide", page_icon="💹")
 from ui.styles import inject_global_css; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
