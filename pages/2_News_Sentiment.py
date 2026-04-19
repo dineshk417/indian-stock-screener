@@ -1,140 +1,334 @@
 """
 Page 2: News & AI Sentiment Analysis
-- Claude-powered market summary
-- Sector sentiment breakdown
-- Live news feed with sentiment tags
-- Stock mentions from news
 """
 import streamlit as st
 from data.news_fetcher import fetch_market_news, format_news_for_claude
 from analysis.sentiment import analyze_market_sentiment, has_api_key, get_engine_name
-from ui.components import news_item, sector_sentiment_bar
 
 st.set_page_config(page_title="News & Sentiment · ShareSaathi", layout="wide", page_icon="📰")
 from ui.styles import inject_global_css; inject_global_css()
+
+# ── PAGE HEADER ────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div style="margin-bottom:4px;">'
+    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
+    'text-transform:uppercase;letter-spacing:0.1em;">AI · Market Intelligence · Daily</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 st.title("📰 News & Market Sentiment")
 
-
-# ── FETCH NEWS ─────────────────────────────────────────────────────────────────
-with st.spinner("Fetching latest market news..."):
-    news_items = fetch_market_news()
+# ── FETCH ──────────────────────────────────────────────────────────────────────
+fetch_banner = st.empty()
+fetch_banner.markdown(
+    '<div style="background:rgba(124,131,253,0.06);border:1px solid rgba(124,131,253,0.2);'
+    'border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;margin-bottom:16px;">'
+    '<div style="width:8px;height:8px;border-radius:50%;background:#7c83fd;'
+    'animation:pulse 1.2s ease-in-out infinite;flex-shrink:0;"></div>'
+    '<div style="color:#7c83fd;font-weight:700;font-size:0.85rem;">Fetching latest market news…</div>'
+    '</div>',
+    unsafe_allow_html=True,
+)
+news_items = fetch_market_news()
+fetch_banner.empty()
 
 if not news_items:
     st.error("Could not fetch news. Check your internet connection.")
     st.stop()
 
-st.caption(f"Fetched {len(news_items)} news items from multiple sources.")
-
-# ── SENTIMENT ANALYSIS (Claude if key set, else free VADER) ────────────────────
+# ── ANALYSE ────────────────────────────────────────────────────────────────────
 engine = get_engine_name()
-with st.spinner(f"Analysing sentiment with {engine}…"):
-    try:
-        news_text = format_news_for_claude(news_items, max_items=30)
-        sentiment = analyze_market_sentiment(news_text, news_items=news_items)
-    except Exception as _e:
-        st.warning("Sentiment analysis unavailable right now. Showing news feed only.")
-        sentiment = {}
-
-# Overall sentiment header
-overall = sentiment.get("overall_sentiment", 5)
-label = sentiment.get("sentiment_label", "Neutral")
-sentiment_colors = {
-    "Strongly Bullish": "#00897B", "Bullish": "#26a69a",
-    "Neutral": "#888", "Bearish": "#ef5350", "Strongly Bearish": "#b71c1c",
-}
-color = sentiment_colors.get(label, "#888")
-
-st.markdown(
-    f'<div style="background:{color}22; border: 1px solid {color}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">'
-    f'<h3 style="color:{color}; margin:0;">Market Sentiment: {label} ({overall}/10)</h3>'
+analyse_banner = st.empty()
+analyse_banner.markdown(
+    f'<div style="background:rgba(124,131,253,0.06);border:1px solid rgba(124,131,253,0.2);'
+    f'border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;margin-bottom:16px;">'
+    f'<div style="width:8px;height:8px;border-radius:50%;background:#7c83fd;'
+    f'animation:pulse 1.2s ease-in-out infinite;flex-shrink:0;"></div>'
+    f'<div style="color:#7c83fd;font-weight:700;font-size:0.85rem;">'
+    f'Analysing sentiment with {engine}…</div>'
     f'</div>',
     unsafe_allow_html=True,
 )
+try:
+    news_text = format_news_for_claude(news_items, max_items=30)
+    sentiment = analyze_market_sentiment(news_text, news_items=news_items)
+except Exception:
+    sentiment = {}
+analyse_banner.empty()
 
-# Sentiment gauge
-col1, col2 = st.columns([3, 1])
-with col1:
-    # Market Summary
-    st.subheader("Market Summary")
-    summary_text = sentiment.get("overnight_summary", "")
-    if summary_text:
-        st.markdown(summary_text)
+# ── PARSE SENTIMENT DATA ───────────────────────────────────────────────────────
+overall   = sentiment.get("overall_sentiment", 5)
+label     = sentiment.get("sentiment_label", "Neutral")
+summary   = sentiment.get("overnight_summary", "")
+impl      = sentiment.get("trade_implications", "")
+themes    = sentiment.get("key_themes", [])
+catalysts = sentiment.get("key_catalysts", [])
+risks     = sentiment.get("key_risks", [])
+sectors   = sentiment.get("sector_outlook", {})
+mentions  = sentiment.get("stock_mentions", [])
 
-    # Trade Implications
-    implications = sentiment.get("trade_implications", "")
-    if implications:
-        st.subheader("Trade Implications")
-        st.info(implications)
+_SENT_META = {
+    "Strongly Bullish": ("#00c896", "0,200,150",  "↑↑"),
+    "Bullish":          ("#00c896", "0,200,150",  "↑"),
+    "Neutral":          ("#f0b429", "240,180,41", "→"),
+    "Bearish":          ("#ff4d6d", "255,77,109", "↓"),
+    "Strongly Bearish": ("#ff4d6d", "255,77,109", "↓↓"),
+}
+s_color, s_rgb, s_arrow = _SENT_META.get(label, ("#f0b429", "240,180,41", "→"))
+score_pct = int(overall * 10)  # 0-100
 
-    # Key Themes
-    themes = sentiment.get("key_themes", [])
+# ── SENTIMENT HERO CARD ────────────────────────────────────────────────────────
+st.markdown(
+    f'<div style="background:linear-gradient(145deg,#111827,#0d1117);'
+    f'border:1px solid rgba({s_rgb},0.2);border-radius:20px;'
+    f'padding:28px 32px;margin-bottom:20px;position:relative;overflow:hidden;">'
+
+    f'<div style="position:absolute;top:-40px;right:-40px;width:200px;height:200px;'
+    f'background:radial-gradient(circle,rgba({s_rgb},0.08),transparent 65%);pointer-events:none;"></div>'
+
+    f'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px;">'
+
+    # Left: score
+    f'<div style="display:flex;align-items:center;gap:24px;">'
+    f'<div style="text-align:center;">'
+    f'<div style="font-size:3.5rem;font-weight:900;color:{s_color};line-height:1;letter-spacing:-0.04em;">{overall}<span style="font-size:1.4rem;color:rgba({s_rgb},0.5);">/10</span></div>'
+    f'<div style="font-size:0.65rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.1em;margin-top:4px;">Sentiment Score</div>'
+    f'</div>'
+    f'<div>'
+    f'<div style="display:inline-flex;align-items:center;gap:8px;'
+    f'background:rgba({s_rgb},0.12);border:1px solid rgba({s_rgb},0.3);'
+    f'border-radius:10px;padding:8px 16px;margin-bottom:10px;">'
+    f'<span style="font-size:1.1rem;font-weight:800;color:{s_color};">{s_arrow} {label}</span>'
+    f'</div>'
+    f'<div style="width:200px;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;">'
+    f'<div style="width:{score_pct}%;height:100%;'
+    f'background:linear-gradient(90deg,rgba({s_rgb},0.4),{s_color});border-radius:3px;"></div>'
+    f'</div>'
+    f'<div style="color:#475569;font-size:0.7rem;margin-top:4px;">{engine} · {len(news_items)} articles analysed</div>'
+    f'</div>'
+    f'</div>'
+
+    # Right: quick stats
+    f'<div style="display:flex;gap:12px;flex-wrap:wrap;">'
+    f'<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);'
+    f'border-radius:12px;padding:12px 16px;min-width:70px;text-align:center;">'
+    f'<div style="font-size:1.4rem;font-weight:800;color:#f1f5f9;">{len(news_items)}</div>'
+    f'<div style="font-size:0.6rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;">Articles</div>'
+    f'</div>'
+    f'<div style="background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.15);'
+    f'border-radius:12px;padding:12px 16px;min-width:70px;text-align:center;">'
+    f'<div style="font-size:1.4rem;font-weight:800;color:#00c896;">{len(catalysts)}</div>'
+    f'<div style="font-size:0.6rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;">Catalysts</div>'
+    f'</div>'
+    f'<div style="background:rgba(255,77,109,0.06);border:1px solid rgba(255,77,109,0.15);'
+    f'border-radius:12px;padding:12px 16px;min-width:70px;text-align:center;">'
+    f'<div style="font-size:1.4rem;font-weight:800;color:#ff4d6d;">{len(risks)}</div>'
+    f'<div style="font-size:0.6rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;">Risks</div>'
+    f'</div>'
+    f'</div>'
+
+    f'</div></div>',
+    unsafe_allow_html=True,
+)
+
+# ── SUMMARY + SECTOR OUTLOOK ───────────────────────────────────────────────────
+left, right = st.columns([3, 2])
+
+with left:
+    # Market Summary card
+    if summary:
+        st.markdown(
+            '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Market Summary</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
+            f'border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px 22px;'
+            f'color:#94a3b8;font-size:0.88rem;line-height:1.75;margin-bottom:16px;">'
+            f'{summary}</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Trade implications
+    if impl:
+        st.markdown(
+            '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Trade Implication</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f'<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.18);'
+            f'border-left:4px solid #f0b429;border-radius:12px;padding:16px 18px;'
+            f'color:#94a3b8;font-size:0.85rem;line-height:1.7;margin-bottom:16px;">'
+            f'💡 {impl}</div>',
+            unsafe_allow_html=True,
+        )
+
+    # Key themes as chips
     if themes:
-        st.subheader("Key Themes")
-        cols = st.columns(min(len(themes), 3))
-        for i, theme in enumerate(themes):
-            cols[i % 3].markdown(f"🔹 {theme}")
+        st.markdown(
+            '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Key Themes</div>',
+            unsafe_allow_html=True,
+        )
+        chips = " ".join([
+            f'<span style="display:inline-block;background:rgba(124,131,253,0.1);'
+            f'color:#7c83fd;border:1px solid rgba(124,131,253,0.25);'
+            f'border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:600;margin:3px 2px;">'
+            f'# {t}</span>'
+            for t in themes
+        ])
+        st.markdown(f'<div style="line-height:2.2;margin-bottom:16px;">{chips}</div>', unsafe_allow_html=True)
 
-    # Catalysts & Risks
-    row = st.columns(2)
-    with row[0]:
-        catalysts = sentiment.get("key_catalysts", [])
-        if catalysts:
-            st.subheader("Key Catalysts")
-            for c in catalysts:
-                st.markdown(f"✅ {c}")
-    with row[1]:
-        risks = sentiment.get("key_risks", [])
-        if risks:
-            st.subheader("Key Risks")
-            for r in risks:
-                st.markdown(f"⚠️ {r}")
-
-with col2:
-    # Sector Outlook
-    st.subheader("Sector Outlook")
-    sector_outlook = sentiment.get("sector_outlook", {})
-    for sector, sent in sector_outlook.items():
-        sector_sentiment_bar(sector, sent)
-
-    # Stock Mentions
-    mentions = sentiment.get("stock_mentions", [])
-    if mentions:
-        st.subheader("Stock Mentions")
-        for mention in mentions[:8]:
-            sym = mention.get("symbol", "")
-            sent = mention.get("sentiment", "neutral")
-            reason = mention.get("reason", "")
-            tag_color = {"positive": "#26a69a", "negative": "#ef5350", "neutral": "#888"}.get(sent.lower(), "#888")
+    # Catalysts + Risks side by side
+    if catalysts or risks:
+        c1, c2 = st.columns(2)
+        with c1:
             st.markdown(
-                f'<div style="padding:4px 0; border-bottom:1px solid #333;">'
-                f'<b>{sym}</b> <span style="color:{tag_color}; font-size:0.8em;">● {sent}</span>'
-                f'<br><small style="color:#aaa;">{reason[:100]}</small></div>',
+                '<div style="font-size:0.68rem;font-weight:700;color:#00c896;'
+                'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">↑ Catalysts</div>',
+                unsafe_allow_html=True,
+            )
+            for item in catalysts:
+                st.markdown(
+                    f'<div style="background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.15);'
+                    f'border-radius:10px;padding:10px 14px;margin-bottom:6px;'
+                    f'color:#94a3b8;font-size:0.8rem;line-height:1.5;">'
+                    f'<span style="color:#00c896;font-weight:700;margin-right:6px;">✓</span>{item}</div>',
+                    unsafe_allow_html=True,
+                )
+        with c2:
+            st.markdown(
+                '<div style="font-size:0.68rem;font-weight:700;color:#ff4d6d;'
+                'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">↓ Risks</div>',
+                unsafe_allow_html=True,
+            )
+            for item in risks:
+                st.markdown(
+                    f'<div style="background:rgba(255,77,109,0.06);border:1px solid rgba(255,77,109,0.15);'
+                    f'border-radius:10px;padding:10px 14px;margin-bottom:6px;'
+                    f'color:#94a3b8;font-size:0.8rem;line-height:1.5;">'
+                    f'<span style="color:#ff4d6d;font-weight:700;margin-right:6px;">⚠</span>{item}</div>',
+                    unsafe_allow_html=True,
+                )
+
+with right:
+    # Sector Outlook
+    if sectors:
+        st.markdown(
+            '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Sector Outlook</div>',
+            unsafe_allow_html=True,
+        )
+        _SC = {"bullish": ("#00c896", "0,200,150"), "bearish": ("#ff4d6d", "255,77,109"), "neutral": ("#f0b429", "240,180,41")}
+        for sector, sent in sectors.items():
+            c, rgb = _SC.get(sent.lower(), ("#6b7a99", "107,122,153"))
+            arrow = "↑" if sent.lower() == "bullish" else ("↓" if sent.lower() == "bearish" else "→")
+            st.markdown(
+                f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                f'background:rgba({rgb},0.06);border:1px solid rgba({rgb},0.15);'
+                f'border-radius:10px;padding:10px 14px;margin-bottom:6px;">'
+                f'<span style="color:#94a3b8;font-size:0.82rem;font-weight:500;">{sector}</span>'
+                f'<span style="color:{c};font-size:0.72rem;font-weight:700;'
+                f'background:rgba({rgb},0.12);border-radius:5px;padding:2px 8px;">'
+                f'{arrow} {sent.capitalize()}</span>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
 
-st.divider()
+    # Stock Mentions
+    if mentions:
+        st.markdown(
+            '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin:16px 0 10px;">Stock Mentions</div>',
+            unsafe_allow_html=True,
+        )
+        _MC = {"positive": ("#00c896", "0,200,150"), "negative": ("#ff4d6d", "255,77,109"), "neutral": ("#6b7a99", "107,122,153")}
+        for m in mentions[:8]:
+            sym  = m.get("symbol", "")
+            sent = m.get("sentiment", "neutral").lower()
+            reason = m.get("reason", "")
+            c, rgb = _MC.get(sent, ("#6b7a99", "107,122,153"))
+            st.markdown(
+                f'<div style="background:rgba({rgb},0.05);border:1px solid rgba({rgb},0.15);'
+                f'border-radius:10px;padding:10px 14px;margin-bottom:6px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+                f'<span style="font-weight:800;color:#e2e8f0;font-size:0.9rem;">{sym}</span>'
+                f'<span style="color:{c};font-size:0.65rem;font-weight:700;'
+                f'background:rgba({rgb},0.12);border-radius:4px;padding:2px 7px;">'
+                f'{sent.upper()}</span>'
+                f'</div>'
+                f'<div style="color:#475569;font-size:0.75rem;line-height:1.5;">{reason[:120]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 # ── NEWS FEED ──────────────────────────────────────────────────────────────────
-st.subheader("News Feed")
+st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
+st.markdown(
+    '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+    'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;">Live News Feed</div>',
+    unsafe_allow_html=True,
+)
 
-# Build sentiment map for news items from stock_mentions
-mention_map = {}
-for m in sentiment.get("stock_mentions", []):
-    sym = m.get("symbol", "").upper()
-    if sym:
-        mention_map[sym] = m.get("sentiment", "neutral")
+all_sources      = sorted(set(n["source"] for n in news_items))
+selected_sources = st.multiselect("Filter by source", all_sources, default=all_sources, label_visibility="collapsed")
+filtered_news    = [n for n in news_items if n["source"] in selected_sources]
 
-# Source filter
-all_sources = sorted(set(n["source"] for n in news_items))
-selected_sources = st.multiselect("Filter by source:", all_sources, default=all_sources)
-filtered_news = [n for n in news_items if n["source"] in selected_sources]
+mention_map = {m.get("symbol", "").upper(): m.get("sentiment", "neutral") for m in mentions}
+
+_TAG_META = {
+    "positive": ("#00c896", "0,200,150"),
+    "negative": ("#ff4d6d", "255,77,109"),
+    "neutral":  ("#6b7a99", "107,122,153"),
+}
 
 for item in filtered_news[:40]:
-    # Try to tag news with sentiment from mention_map
-    title_upper = item.get("title", "").upper()
+    title   = item.get("title", "")
+    source  = item.get("source", "")
+    pub     = item.get("published_str", "")
+    url     = item.get("url", "#")
+    summary_txt = item.get("summary", "")
+
     tag = None
     for sym, sent in mention_map.items():
-        if sym in title_upper:
+        if sym in title.upper():
             tag = sent
             break
-    news_item(item, sentiment_tag=tag)
+
+    tag_html = ""
+    if tag:
+        tc, trgb = _TAG_META.get(tag.lower(), ("#6b7a99", "107,122,153"))
+        tag_html = (
+            f'<span style="background:rgba({trgb},0.12);color:{tc};'
+            f'border:1px solid rgba({trgb},0.25);border-radius:4px;'
+            f'padding:1px 7px;font-size:0.62rem;font-weight:700;'
+            f'letter-spacing:0.05em;margin-left:8px;">{tag.upper()}</span>'
+        )
+
+    st.markdown(
+        f'<div style="background:linear-gradient(145deg,#0f1420,#0d1117);'
+        f'border:1px solid rgba(255,255,255,0.05);border-radius:12px;'
+        f'padding:14px 18px;margin-bottom:8px;">'
+        f'<div style="margin-bottom:6px;">'
+        f'<a href="{url}" target="_blank" '
+        f'style="color:#93c5fd;text-decoration:none;font-weight:600;font-size:0.875rem;'
+        f'line-height:1.45;">{title}</a>{tag_html}'
+        f'</div>'
+        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
+        f'<span style="background:rgba(255,255,255,0.05);color:#475569;'
+        f'border-radius:4px;padding:2px 8px;font-size:0.65rem;font-weight:600;">{source}</span>'
+        f'<span style="color:#374151;font-size:0.7rem;">{pub}</span>'
+        f'</div>'
+        f'<div style="color:#374151;font-size:0.78rem;line-height:1.55;">{summary_txt[:180]}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+st.markdown(
+    '<div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05);">'
+    '<span style="color:#374151;font-size:0.72rem;">⚠️ For educational purposes only. Not financial advice.</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
