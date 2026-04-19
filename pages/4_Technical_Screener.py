@@ -73,30 +73,31 @@ st.markdown(
 )
 
 p_cols = st.columns(4)
-run_oversold = run_breakout = run_golden = run_momentum = False
-
-for col, p in zip(p_cols, PRESETS_UI):
+_preset_btns = {}
+for col, p, key in zip(p_cols, PRESETS_UI, ["run_os", "run_bo", "run_gc", "run_mo"]):
     with col:
         st.markdown(
             f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
             f'border:1px solid rgba(255,255,255,0.06);border-top:3px solid {p["color"]};'
             f'border-radius:14px;padding:16px;margin-bottom:6px;">'
             f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
-            f'<span style="font-size:1.4rem;">{p["icon"]}</span>'
+            f'<div style="width:32px;height:32px;border-radius:8px;'
+            f'background:rgba({p["rgb"]},0.12);display:flex;align-items:center;'
+            f'justify-content:center;font-size:1.1rem;flex-shrink:0;">{p["icon"]}</div>'
             f'<div>'
             f'<div style="font-size:0.82rem;font-weight:700;color:#e2e8f0;">{p["label"]}</div>'
             f'<div style="font-size:0.65rem;font-weight:700;color:{p["color"]};letter-spacing:0.04em;">{p["sub"]}</div>'
             f'</div></div>'
-            f'<div style="font-size:0.72rem;color:#475569;line-height:1.45;">{p["desc"]}</div>'
+            f'<div style="font-size:0.72rem;color:#475569;line-height:1.45;margin-bottom:12px;">{p["desc"]}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
+        _preset_btns[key] = st.button(f"Run {p['label']}", key=key, use_container_width=True)
 
-btn_cols = st.columns(4)
-with btn_cols[0]: run_oversold = st.button("Run Oversold →",     key="run_os",  use_container_width=True)
-with btn_cols[1]: run_breakout = st.button("Run Breakout →",     key="run_bo",  use_container_width=True)
-with btn_cols[2]: run_golden   = st.button("Run Golden Cross →", key="run_gc",  use_container_width=True)
-with btn_cols[3]: run_momentum = st.button("Run Momentum →",     key="run_mo",  use_container_width=True)
+run_oversold = _preset_btns["run_os"]
+run_breakout = _preset_btns["run_bo"]
+run_golden   = _preset_btns["run_gc"]
+run_momentum = _preset_btns["run_mo"]
 
 st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 

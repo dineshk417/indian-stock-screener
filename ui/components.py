@@ -158,22 +158,6 @@ def signal_card(signal_dict: dict):
     )
     st.markdown(html, unsafe_allow_html=True)
 
-    reasoning = signal_dict.get("reasoning", "")
-    patterns  = signal_dict.get("patterns", [])
-    with st.expander("Analysis & Chart"):
-        if patterns:
-            chips = " ".join([
-                f'<span style="display:inline-block;background:{strat_color}12;color:{strat_color};'
-                f'border:1px solid {strat_color}28;border-radius:4px;'
-                f'padding:2px 8px;font-size:0.7rem;font-weight:600;margin:2px;">{p}</span>'
-                for p in patterns
-            ])
-            st.markdown(f'<div style="margin-bottom:10px;">{chips}</div>', unsafe_allow_html=True)
-        if reasoning:
-            parts = [p.strip() for p in reasoning.replace("Strategy:", "\nStrategy:").split(".") if len(p.strip()) > 6]
-            for part in parts:
-                st.caption(f"• {part.strip()}")
-
 
 def news_item(item: dict, sentiment_tag: str = None):
     """Render a single news item."""

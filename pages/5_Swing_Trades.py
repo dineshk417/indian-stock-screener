@@ -81,6 +81,16 @@ def get_sentiment_score():
     )
     return result.get("overall_sentiment", 5) / 10
 
+# ── SCAN FACTS (shown during scan) ─────────────────────────────────────────────
+_SCAN_FACTS = [
+    ("📊 RSI & Momentum",      "RSI between 35–65 is the sweet spot for swing entries — not oversold, not overbought. We look for momentum without exhaustion."),
+    ("📈 Trend Pullback",      "Best swing trades enter during a pullback within an uptrend. Price above SMA50 and SMA200 confirms the trend; EMA21 is our pullback target."),
+    ("🕯️ Volume Confirmation", "Volume 1.5× average during a breakout signals institutional participation — not just retail noise. We require it for Volume Breakout signals."),
+    ("✨ Golden Cross",        "SMA50 crossing above SMA200 is one of the most historically reliable long-term bullish signals in Indian equity markets."),
+    ("🛡️ ATR-Based Stops",    "Stop-losses are set at 1.5× ATR from entry. ATR adapts to each stock's volatility so stops are neither too tight nor too wide."),
+    ("⚡ Supertrend Reversal", "When Supertrend flips from bearish to bullish and MACD confirms, it often marks the start of a new swing leg — we catch it within 5 bars."),
+]
+
 # ── SCAN ───────────────────────────────────────────────────────────────────────
 if run_btn or "swing_signals" not in st.session_state:
     try:
@@ -88,30 +98,38 @@ if run_btn or "swing_signals" not in st.session_state:
     except Exception:
         sentiment_score = 0.5
 
-    # Scanning banner
-    scan_banner = st.empty()
-    scan_banner.markdown(
-        f'<div style="background:rgba(240,180,41,0.08);border:1px solid rgba(240,180,41,0.2);'
-        f'border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px;">'
-        f'<div style="width:8px;height:8px;border-radius:50%;background:#f0b429;'
-        f'animation:pulse 1.2s ease-in-out infinite;flex-shrink:0;"></div>'
-        f'<div>'
-        f'<div style="color:#f0b429;font-weight:700;font-size:0.85rem;">Scanning {len(tickers)} stocks</div>'
-        f'<div style="color:#64748b;font-size:0.75rem;margin-top:2px;">'
-        f'Checking 6 strategies · Trend Pullback · Volume Breakout · Golden Cross · more…'
-        f'</div>'
-        f'</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+    scan_slot = st.empty()
+
+    def _on_tick(ticker, strategies, done, total):
+        label   = ticker.replace(".NS", "")
+        pct     = max(4, done / total * 96)
+        fact    = _SCAN_FACTS[(done - 1) % len(_SCAN_FACTS)]
+        found   = f" · {len(strategies)} signal{'s' if len(strategies) != 1 else ''}" if strategies else ""
+        scan_slot.markdown(
+            f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
+            f'border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px 26px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+            f'<span style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;'
+            f'text-transform:uppercase;color:#475569;">Scanning {label}{found}</span>'
+            f'<span style="font-size:0.72rem;color:#f0b429;font-weight:700;">{done} / {total}</span>'
+            f'</div>'
+            f'<div style="background:rgba(255,255,255,0.06);border-radius:99px;'
+            f'height:4px;margin-bottom:18px;overflow:hidden;">'
+            f'<div style="width:{pct:.1f}%;height:100%;'
+            f'background:linear-gradient(90deg,#f0b429,#00c896);border-radius:99px;"></div></div>'
+            f'<div style="font-size:0.88rem;font-weight:700;color:#e2e8f0;margin-bottom:5px;">{fact[0]}</div>'
+            f'<div style="font-size:0.8rem;color:#64748b;line-height:1.6;">{fact[1]}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     try:
-        signals = generate_swing_signals(tickers, sentiment_score=sentiment_score)
+        signals = generate_swing_signals(tickers, sentiment_score=sentiment_score, on_tick=_on_tick)
     except Exception as _e:
         st.error(f"Signal generation failed: {_e}. Please try again.")
         signals = []
 
-    scan_banner.empty()
+    scan_slot.empty()
     st.session_state.swing_signals        = signals
     st.session_state.swing_sentiment_score = sentiment_score
 
@@ -237,7 +255,20 @@ st.markdown(
 # ── SIGNAL CARDS ───────────────────────────────────────────────────────────────
 for signal in filtered:
     signal_card(signal.to_dict())
-    with st.expander(f"📊 Chart · {signal.ticker.replace('.NS', '')}", expanded=False):
+    strat_color = _STRATEGY_COLORS.get(signal.strategy, "#6b7a99")
+    with st.expander(f"📊 {signal.ticker.replace('.NS','')} — Analysis & Chart", expanded=False):
+        if signal.patterns:
+            chips = " ".join([
+                f'<span style="display:inline-block;background:{strat_color}12;color:{strat_color};'
+                f'border:1px solid {strat_color}28;border-radius:4px;'
+                f'padding:2px 8px;font-size:0.7rem;font-weight:600;margin:2px;">{p}</span>'
+                for p in signal.patterns
+            ])
+            st.markdown(f'<div style="margin-bottom:10px;">{chips}</div>', unsafe_allow_html=True)
+        if signal.reasoning:
+            parts = [p.strip() for p in signal.reasoning.replace("Strategy:", "\nStrategy:").split(".") if len(p.strip()) > 6]
+            for part in parts:
+                st.caption(f"• {part.strip()}")
         df = fetch_single_stock(signal.ticker)
         if df is not None:
             df_ind = compute_indicators(df)
