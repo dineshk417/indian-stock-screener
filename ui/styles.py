@@ -109,6 +109,85 @@ button[data-testid="baseButton-primary"] {
 [data-testid="stMultiSelect"] > div > div {
     border-radius: 10px !important;
     border-color: rgba(255,255,255,0.1) !important;
+    background: rgba(255,255,255,0.03) !important;
+}
+
+/* ── Multiselect tags — kill the default salmon/red ──────────────────────── */
+[data-baseweb="tag"] {
+    background: rgba(124,131,253,0.14) !important;
+    border: 1px solid rgba(124,131,253,0.32) !important;
+    border-radius: 6px !important;
+    padding: 2px 6px !important;
+}
+[data-baseweb="tag"] span {
+    color: #a5b4fc !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+}
+[data-baseweb="tag"] [role="presentation"] svg {
+    fill: rgba(165,180,252,0.7) !important;
+}
+
+/* ── Number / text inputs ─────────────────────────────────────────────────── */
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"]   input,
+[data-testid="stTextArea"]    textarea {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 8px !important;
+    color: #e2e8f0 !important;
+    font-size: 0.88rem !important;
+}
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextInput"]   input:focus,
+[data-testid="stTextArea"]    textarea:focus {
+    border-color: rgba(240,180,41,0.5) !important;
+    box-shadow: 0 0 0 2px rgba(240,180,41,0.1) !important;
+}
+
+/* ── Checkboxes ───────────────────────────────────────────────────────────── */
+[data-testid="stCheckbox"] label span {
+    font-size: 0.84rem !important;
+    color: #94a3b8 !important;
+}
+[data-testid="stCheckbox"] input:checked + div {
+    background: #f0b429 !important;
+    border-color: #f0b429 !important;
+}
+
+/* ── Sliders ──────────────────────────────────────────────────────────────── */
+[data-testid="stSlider"] [role="slider"] {
+    background: #f0b429 !important;
+    box-shadow: 0 0 0 4px rgba(240,180,41,0.2) !important;
+}
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"] {
+    color: #475569 !important;
+    font-size: 0.72rem !important;
+}
+
+/* ── Download button ──────────────────────────────────────────────────────── */
+[data-testid="stDownloadButton"] > button {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #94a3b8 !important;
+    border-radius: 8px !important;
+    font-size: 0.82rem !important;
+}
+[data-testid="stDownloadButton"] > button:hover {
+    border-color: rgba(240,180,41,0.4) !important;
+    color: #f0b429 !important;
+}
+
+/* ── Selectbox dropdown options ───────────────────────────────────────────── */
+[data-baseweb="popover"] [role="option"] {
+    font-size: 0.84rem !important;
+    color: #94a3b8 !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] [aria-selected="true"] {
+    background: rgba(240,180,41,0.1) !important;
+    color: #f0b429 !important;
 }
 
 /* ── DataFrames ───────────────────────────────────────────────────────────── */
