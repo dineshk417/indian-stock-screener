@@ -31,21 +31,47 @@ def _live_quote(ticker: str) -> dict:
 # ── Page shell (static — renders once per page load) ──────────────────────────
 st.set_page_config(page_title="Market Overview · ShareSaathi", layout="wide", page_icon="📊")
 from ui.styles import inject_global_css; inject_global_css()
-st.title("📊 Market Overview — Indian Markets")
+
+st.markdown(
+    '<div style="margin-bottom:4px;">'
+    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
+    'text-transform:uppercase;letter-spacing:0.1em;">NSE · BSE · Live</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
+st.title("📊 Market Overview")
 
 status     = market_status()
 is_holiday = not status["is_trading_day"]
-sc = "#26a69a" if status["is_market_open"] else ("#888" if is_holiday else "#ef5350")
+_is_open   = status["is_market_open"]
+_is_pre    = status["is_pre_market"]
+_sc        = "#00c896" if _is_open else ("#f0b429" if _is_pre else "#ff4d6d")
+_rgb       = "0,200,150" if _is_open else ("240,180,41" if _is_pre else "255,77,109")
+_pulse     = "animation:pulse 1.4s ease-in-out infinite;" if (_is_open or _is_pre) else ""
+
 st.markdown(
-    f'<div style="background:{sc}22;border-left:4px solid {sc};'
-    f'padding:8px 16px;border-radius:4px;margin-bottom:16px;">'
-    f'<b>{status["status_label"]}</b> · {status["datetime_ist"]}</div>',
+    f'<div style="background:rgba({_rgb},0.06);border:1px solid rgba({_rgb},0.2);'
+    f'border-radius:12px;padding:12px 18px;display:flex;align-items:center;'
+    f'justify-content:space-between;margin-bottom:{"8" if is_holiday else "20"}px;">'
+    f'<div style="display:flex;align-items:center;gap:10px;">'
+    f'<div style="width:9px;height:9px;border-radius:50%;background:{_sc};flex-shrink:0;{_pulse}"></div>'
+    f'<span style="color:{_sc};font-weight:700;font-size:0.9rem;">{status["status_label"]}</span>'
+    f'<span style="color:#475569;font-size:0.8rem;">{status["datetime_ist"]}</span>'
+    f'</div>'
+    f'<span style="color:#374151;font-size:0.75rem;">'
+    f'{status["market_open_time"]} – {status["market_close_time"]} IST</span>'
+    f'</div>',
     unsafe_allow_html=True,
 )
 if is_holiday:
-    st.info(
-        "Today is a market holiday. All figures reflect the **previous trading day's close**.",
-        icon="🏖️",
+    st.markdown(
+        '<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.2);'
+        'border-left:4px solid #f0b429;border-radius:12px;padding:12px 18px;margin-bottom:20px;">'
+        '<span style="color:#f0b429;font-weight:700;font-size:0.85rem;">🏖️ Market Holiday</span>'
+        '<span style="color:#64748b;font-size:0.8rem;margin-left:10px;">'
+        'All figures reflect the previous trading day\'s close.</span>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
 # ── Load 1Y daily history once (used for chart + YTD calc inside fragment) ────
