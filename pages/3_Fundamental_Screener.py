@@ -12,7 +12,7 @@ from analysis.screener import StockScreener, PRESETS, build_screen_data
 from ui.components import screener_result_table
 from config.stock_universe import NIFTY_50, NIFTY_200, get_all_sectors, SECTOR_MAP
 
-st.set_page_config(page_title="Fundamental Screener", layout="wide", page_icon="🔍")
+st.set_page_config(page_title="Fundamental Screener · ShareSaathi", layout="wide", page_icon="🔍")
 from ui.styles import inject_global_css; inject_global_css()
 st.title("🔍 Fundamental Screener")
 

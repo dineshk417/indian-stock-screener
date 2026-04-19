@@ -29,7 +29,7 @@ def _live_quote(ticker: str) -> dict:
 
 
 # ── Page shell (static — renders once per page load) ──────────────────────────
-st.set_page_config(page_title="Market Overview", layout="wide", page_icon="📊")
+st.set_page_config(page_title="Market Overview · ShareSaathi", layout="wide", page_icon="📊")
 from ui.styles import inject_global_css; inject_global_css()
 st.title("📊 Market Overview — Indian Markets")
 

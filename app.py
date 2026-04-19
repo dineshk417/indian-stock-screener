@@ -67,12 +67,12 @@ except Exception:
 _catchup_signals()
 
 st.set_page_config(
-    page_title="IndiaScreener — AI Stock Analysis",
-    page_icon="📊",
+    page_title="ShareSaathi — AI Stock Analysis",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
-        "About": "IndiaScreener — AI-powered stock screener for Indian retail investors.",
+        "About": "ShareSaathi — AI-powered stock analysis for Indian retail investors.",
     },
 )
 
@@ -116,8 +116,8 @@ st.markdown(
 
     # Title
     f'<div style="font-size:2.8rem;font-weight:900;margin:0 0 14px;letter-spacing:-0.04em;'
-    f'line-height:1.1;color:#f1f5f9;">India<span style="background:linear-gradient(135deg,#f0b429,#f97316);'
-    f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Screener</span></div>'
+    f'line-height:1.1;color:#f1f5f9;">Share<span style="background:linear-gradient(135deg,#f0b429,#f97316);'
+    f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Saathi</span></div>'
 
     # Tagline
     f'<p style="color:#64748b;font-size:1rem;margin:0 0 28px;line-height:1.7;max-width:520px;">'
@@ -284,7 +284,7 @@ st.markdown(
     '<span style="color:#374151;font-size:0.73rem;">'
     '⚠️ Educational purposes only — not financial advice. Do your own research.'
     '</span>'
-    '<span style="color:#1e2535;font-size:0.7rem;">yfinance · Claude AI · Streamlit</span>'
+    '<span style="color:#1e2535;font-size:0.7rem;">ShareSaathi · yfinance · Claude AI · Streamlit</span>'
     '</div>',
     unsafe_allow_html=True,
 )
