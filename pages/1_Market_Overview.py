@@ -49,20 +49,6 @@ _sc        = "#00c896" if _is_open else ("#f0b429" if _is_pre else "#ff4d6d")
 _rgb       = "0,200,150" if _is_open else ("240,180,41" if _is_pre else "255,77,109")
 _pulse     = "animation:pulse 1.4s ease-in-out infinite;" if (_is_open or _is_pre) else ""
 
-st.markdown(
-    f'<div style="background:rgba({_rgb},0.06);border:1px solid rgba({_rgb},0.2);'
-    f'border-radius:12px;padding:12px 18px;display:flex;align-items:center;'
-    f'justify-content:space-between;margin-bottom:{"8" if is_holiday else "20"}px;">'
-    f'<div style="display:flex;align-items:center;gap:10px;">'
-    f'<div style="width:9px;height:9px;border-radius:50%;background:{_sc};flex-shrink:0;{_pulse}"></div>'
-    f'<span style="color:{_sc};font-weight:700;font-size:0.9rem;">{status["status_label"]}</span>'
-    f'<span style="color:#475569;font-size:0.8rem;">{status["datetime_ist"]}</span>'
-    f'</div>'
-    f'<span style="color:#374151;font-size:0.75rem;">'
-    f'{status["market_open_time"]} – {status["market_close_time"]} IST</span>'
-    f'</div>',
-    unsafe_allow_html=True,
-)
 if is_holiday:
     st.markdown(
         '<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.2);'
@@ -71,6 +57,21 @@ if is_holiday:
         '<span style="color:#64748b;font-size:0.8rem;margin-left:10px;">'
         'All figures reflect the previous trading day\'s close.</span>'
         '</div>',
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        f'<div style="background:rgba({_rgb},0.06);border:1px solid rgba({_rgb},0.2);'
+        f'border-radius:12px;padding:12px 18px;display:flex;align-items:center;'
+        f'justify-content:space-between;margin-bottom:20px;">'
+        f'<div style="display:flex;align-items:center;gap:10px;">'
+        f'<div style="width:9px;height:9px;border-radius:50%;background:{_sc};flex-shrink:0;{_pulse}"></div>'
+        f'<span style="color:{_sc};font-weight:700;font-size:0.9rem;">{status["status_label"]}</span>'
+        f'<span style="color:#475569;font-size:0.8rem;">{status["datetime_ist"]}</span>'
+        f'</div>'
+        f'<span style="color:#374151;font-size:0.75rem;">'
+        f'{status["market_open_time"]} – {status["market_close_time"]} IST</span>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
