@@ -167,6 +167,13 @@ open_signals   = [s for s in signals if s["outcome"] == OUTCOME_OPEN]
 closed_signals = [s for s in signals if s["outcome"] != OUTCOME_OPEN]
 
 # ── Page header ────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div style="margin-bottom:4px;">'
+    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
+    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Trade Journal · Performance</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
 st.title("📋 Signal Log & Performance")
 
 # ── KPI row ────────────────────────────────────────────────────────────────────
@@ -174,20 +181,54 @@ total_closed = perf["won"] + perf["lost"] + perf["squared_off"]
 win_rate_str = f"{perf['win_rate']}%" if total_closed > 0 else "—"
 net_pnl      = perf.get("total_net_pnl_inr")
 net_pnl_str  = f"₹{net_pnl:+,.0f}" if net_pnl is not None else "—"
+net_pnl_color = "#00c896" if (net_pnl or 0) >= 0 else "#ff4d6d"
 avg_r        = perf.get("avg_r")
 avg_r_str    = f"{avg_r:+.2f}R" if avg_r is not None else "—"
+wr_color     = "#00c896" if total_closed > 0 and perf["win_rate"] >= 50 else "#ff4d6d" if total_closed > 0 else "#475569"
 
-k1, k2, k3, k4, k5, k6 = st.columns(6)
-k1.metric("Total Signals",   perf["total"])
-k2.metric("Open",            perf["open"])
-k3.metric("Won (T1+T2)",     perf["won"])
-k4.metric("Stopped",         perf["lost"])
-k5.metric("Win Rate",        win_rate_str)
-k6.metric("Net P&L",         net_pnl_str,
-          help=f"After all transaction costs · ₹{position_size:,}/trade")
+st.markdown(
+    f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">'
+
+    f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+    f'border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;">'
+    f'<div style="color:#64748b;font-size:0.65rem;font-weight:700;text-transform:uppercase;'
+    f'letter-spacing:0.09em;margin-bottom:6px;">Total Signals</div>'
+    f'<div style="color:#f1f5f9;font-size:1.5rem;font-weight:800;">{perf["total"]}</div>'
+    f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{perf["open"]} open · {total_closed} closed</div>'
+    f'</div>'
+
+    f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+    f'border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;">'
+    f'<div style="color:#64748b;font-size:0.65rem;font-weight:700;text-transform:uppercase;'
+    f'letter-spacing:0.09em;margin-bottom:6px;">Win Rate</div>'
+    f'<div style="color:{wr_color};font-size:1.5rem;font-weight:800;">{win_rate_str}</div>'
+    f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{perf["won"]} won · {perf["lost"]} stopped</div>'
+    f'</div>'
+
+    f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+    f'border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;">'
+    f'<div style="color:#64748b;font-size:0.65rem;font-weight:700;text-transform:uppercase;'
+    f'letter-spacing:0.09em;margin-bottom:6px;">Net P&L</div>'
+    f'<div style="color:{net_pnl_color};font-size:1.5rem;font-weight:800;">{net_pnl_str}</div>'
+    f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">After costs · ₹{position_size:,}/trade</div>'
+    f'</div>'
+
+    f'</div>',
+    unsafe_allow_html=True,
+)
 
 if perf["total"] == 0:
-    st.caption("No signals yet — generate signals from Swing Trades or Intraday Ideas and they appear here automatically.")
+    st.markdown(
+        '<div style="background:rgba(124,131,253,0.06);border:1px solid rgba(124,131,253,0.15);'
+        'border-radius:16px;padding:28px;text-align:center;margin:8px 0 16px;">'
+        '<div style="font-size:2rem;margin-bottom:10px;">📭</div>'
+        '<div style="color:#e2e8f0;font-weight:700;font-size:0.95rem;margin-bottom:6px;">No signals logged yet</div>'
+        '<div style="color:#475569;font-size:0.82rem;line-height:1.6;">'
+        'Generate signals from <b style="color:#7c83fd;">Swing Trades</b> or '
+        '<b style="color:#7c83fd;">Intraday Ideas</b> — they appear here automatically.'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
     with st.expander("🧪 Seed test data (verify DB connection)", expanded=False):
         st.caption("Inserts a few sample trades to confirm the database pipeline is working end-to-end.")
@@ -226,10 +267,15 @@ if perf["total"] == 0:
     st.stop()
 
 # ── Charts ─────────────────────────────────────────────────────────────────────
+st.markdown(
+    '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+    'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Performance Charts</div>',
+    unsafe_allow_html=True,
+)
 ch1, ch2 = st.columns(2)
 
 with ch1:
-    st.subheader("Outcome Distribution")
+    st.markdown('<div style="font-size:0.8rem;font-weight:700;color:#94a3b8;margin-bottom:8px;">Outcome Distribution</div>', unsafe_allow_html=True)
     by_outcome = perf.get("by_outcome", {})
     if by_outcome:
         labels = [OUTCOME_LABELS.get(k, k) for k in by_outcome]
@@ -248,7 +294,7 @@ with ch1:
         st.plotly_chart(fig, use_container_width=True)
 
 with ch2:
-    st.subheader("Cumulative Net P&L (₹)")
+    st.markdown('<div style="font-size:0.8rem;font-weight:700;color:#94a3b8;margin-bottom:8px;">Cumulative Net P&L (₹)</div>', unsafe_allow_html=True)
     closed_with_date = [
         s for s in closed_signals
         if s["outcome"] not in (OUTCOME_OPEN,) and s.get("outcome_at")
@@ -328,7 +374,12 @@ def _open_positions_panel():
     if not _open:
         return
 
-    st.subheader(f"Open Positions ({len(_open)})")
+    st.markdown(
+        f'<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+        f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">'
+        f'Open Positions — {len(_open)}</div>',
+        unsafe_allow_html=True,
+    )
     if _is_live:
         _ts = _now.strftime("%H:%M:%S")
         st.caption(f"↻ {_ts} IST · updates every 2 min")
@@ -482,7 +533,12 @@ if st.session_state.pop("_trigger_detected", False):
             pass
 
 # ── Closed Trade Journal ───────────────────────────────────────────────────────
-st.subheader(f"Trade Journal — {len(closed_signals)} closed trades")
+st.markdown(
+    f'<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+    f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">'
+    f'Trade Journal — {len(closed_signals)} closed trades</div>',
+    unsafe_allow_html=True,
+)
 
 if not closed_signals:
     st.caption("No closed trades yet for the selected filters.")
