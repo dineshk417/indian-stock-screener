@@ -138,23 +138,23 @@ with st.sidebar:
                 except Exception as _e:
                     st.error(str(_e))
 
-# ── Auto-resolve open signals ──────────────────────────────────────────────────
+# ── Auto-resolve open signals (throttled to once per 5 min) ───────────────────
 log       = get_signal_logger()
 today_str = _dt.date.today().isoformat()
 now_ist   = _dt.datetime.now(IST)
-market_closed = now_ist.hour > 15 or (now_ist.hour == 15 and now_ist.minute >= 31)
 
 _last_resolve   = st.session_state.get("_last_resolve_ts", 0)
-_should_resolve = (time.time() - _last_resolve) > 300  # throttle to once every 5 min
+_should_resolve = (time.time() - _last_resolve) > 300
 
+_n_resolved = 0
 if _should_resolve:
     open_all = log.get_open_signals()
     st.session_state["_last_resolve_ts"] = time.time()
     if open_all:
         try:
             from signals.outcome_tracker import update_open_signal_outcomes
-            n = update_open_signal_outcomes(position_size_inr=float(position_size))
-            if n:
+            _n_resolved = update_open_signal_outcomes(position_size_inr=float(position_size))
+            if _n_resolved:
                 st.rerun()
         except Exception as _e:
             st.warning(f"Auto-resolve error: {_e}")
@@ -170,11 +170,59 @@ closed_signals = [s for s in signals if s["outcome"] != OUTCOME_OPEN]
 st.markdown(
     '<div style="margin-bottom:4px;">'
     '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Trade Journal · Performance</span>'
+    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Trade Journal · Forward Test</span>'
     '</div>',
     unsafe_allow_html=True,
 )
 st.title("📋 Signal Log & Performance")
+
+# ── Pipeline status card ───────────────────────────────────────────────────────
+from data.market_status import is_market_open as _is_mkt_open
+_mkt_live   = _is_mkt_open()
+_open_count = len(log.get_open_signals())
+_last_ts    = st.session_state.get("_last_resolve_ts", 0)
+_mins_ago   = int((time.time() - _last_ts) / 60) if _last_ts else None
+_next_mins  = max(0, 5 - (_mins_ago or 5))
+
+_dot_color  = "#00c896" if _mkt_live else "#f0b429"
+_dot_rgb    = "0,200,150" if _mkt_live else "240,180,41"
+_dot_pulse  = "animation:pulse 1.4s ease-in-out infinite;" if _mkt_live else ""
+_mkt_label  = "Market Live · Tracking active" if _mkt_live else "Market Closed · Swing outcomes auto-resolved"
+
+_check_btn_col, _ = st.columns([1, 3])
+with _check_btn_col:
+    _force_resolve = st.button("🔄 Check Outcomes Now", use_container_width=True)
+
+if _force_resolve:
+    with st.spinner("Resolving open signals…"):
+        try:
+            from signals.outcome_tracker import update_open_signal_outcomes
+            _n = update_open_signal_outcomes(position_size_inr=float(position_size))
+            st.session_state["_last_resolve_ts"] = time.time()
+            if _n:
+                st.success(f"Resolved {_n} signal(s). Refreshing…")
+                st.rerun()
+            else:
+                st.info("No new outcomes — all open signals are still active.")
+        except Exception as _fe:
+            st.error(f"Resolve error: {_fe}")
+
+st.markdown(
+    f'<div style="background:rgba({_dot_rgb},0.05);border:1px solid rgba({_dot_rgb},0.18);'
+    f'border-radius:12px;padding:12px 18px;display:flex;align-items:center;'
+    f'justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;">'
+    f'<div style="display:flex;align-items:center;gap:10px;">'
+    f'<div style="width:8px;height:8px;border-radius:50%;background:{_dot_color};flex-shrink:0;{_dot_pulse}"></div>'
+    f'<span style="color:{_dot_color};font-weight:700;font-size:0.82rem;">{_mkt_label}</span>'
+    f'</div>'
+    f'<div style="display:flex;gap:16px;flex-wrap:wrap;">'
+    f'<span style="color:#475569;font-size:0.75rem;">🔓 {_open_count} open signals</span>'
+    + (f'<span style="color:#475569;font-size:0.75rem;">Last check {_mins_ago}m ago · next in ~{_next_mins}m</span>'
+       if _mins_ago is not None else
+       f'<span style="color:#475569;font-size:0.75rem;">Checking on load…</span>')
+    + f'</div></div>',
+    unsafe_allow_html=True,
+)
 
 # ── KPI row ────────────────────────────────────────────────────────────────────
 total_closed = perf["won"] + perf["lost"] + perf["squared_off"]

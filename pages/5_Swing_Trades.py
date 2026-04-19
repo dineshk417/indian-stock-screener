@@ -115,6 +115,20 @@ if run_btn or "swing_signals" not in st.session_state:
     st.session_state.swing_signals        = signals
     st.session_state.swing_sentiment_score = sentiment_score
 
+    if signals:
+        import datetime as _dt2
+        st.markdown(
+            f'<div style="background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.2);'
+            f'border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:10px;margin-bottom:4px;">'
+            f'<span style="color:#00c896;font-size:1rem;">✓</span>'
+            f'<span style="color:#00c896;font-weight:700;font-size:0.85rem;">'
+            f'{len(signals)} signals logged to Trade Journal</span>'
+            f'<span style="color:#475569;font-size:0.75rem;margin-left:auto;">'
+            f'{_dt2.datetime.now().strftime("%H:%M:%S")}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
 signals        = st.session_state.get("swing_signals", [])
 sentiment_score = st.session_state.get("swing_sentiment_score", 0.5)
 
