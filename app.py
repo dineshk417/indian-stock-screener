@@ -88,6 +88,23 @@ st.markdown("""
     border:1px solid rgba(255,255,255,0.06);border-radius:16px;
     padding:18px 20px;margin-bottom:10px;
 }
+.nav-card { text-decoration:none !important; display:block; margin-bottom:6px; }
+.nav-card-inner {
+    background:linear-gradient(145deg,#141828,#0f1420);
+    border:1px solid rgba(255,255,255,0.07);border-radius:14px;
+    display:flex;align-items:center;gap:14px;padding:14px 18px;
+    transition:border-color 0.2s ease,background 0.2s ease,transform 0.15s ease;
+    cursor:pointer;
+}
+.nav-card:hover .nav-card-inner {
+    border-color:rgba(240,180,41,0.22);
+    background:linear-gradient(145deg,#191f35,#141828);
+    transform:translateX(2px);
+}
+.nav-icon {
+    width:40px;height:40px;min-width:40px;
+    border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,6 +141,32 @@ st.markdown(
     f'</div>',
     unsafe_allow_html=True,
 )
+
+# ── SVG ICON LIBRARY (used across tabs) ────────────────────────────────────────
+_SVG = {
+    "swing":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="4" height="8" rx="1" fill="rgba(255,255,255,0.1)"/><line x1="5" y1="3" x2="5" y2="6"/><line x1="5" y1="14" x2="5" y2="17"/><rect x="13" y="9" width="4" height="5" rx="1" fill="rgba(255,255,255,0.05)"/><line x1="15" y1="6" x2="15" y2="9"/><line x1="15" y1="14" x2="15" y2="17"/></svg>',
+    "intra":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,15 6,8 10,12 15,5"/><polyline points="13,5 15,5 15,7"/></svg>',
+    "log":    '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="2" width="14" height="16" rx="2"/><line x1="7" y1="7" x2="13" y2="7"/><line x1="7" y1="10" x2="13" y2="10"/><line x1="7" y1="13" x2="10" y2="13"/></svg>',
+    "shield": '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 2L3 5v5c0 4.4 3 8.2 7 9 4-.8 7-4.6 7-9V5z"/><polyline points="7,10 9,12 13,8"/></svg>',
+    "fund":   '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="12" width="4" height="6" rx="1"/><rect x="8" y="7" width="4" height="11" rx="1"/><rect x="14" y="3" width="4" height="15" rx="1"/></svg>',
+    "tech":   '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,14 6,8 10,11 15,5"/><circle cx="15" cy="5" r="1.5" fill="currentColor"/></svg>',
+    "globe":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><line x1="3" y1="10" x2="17" y2="10"/><path d="M10 3c-2.5 2.5-3 4.5-3 7s.5 4.5 3 7c2.5-2.5 3-4.5 3-7s-.5-4.5-3-7z"/></svg>',
+    "news":   '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="11" x2="14" y2="11"/><line x1="6" y1="14" x2="10" y2="14"/></svg>',
+}
+
+def _nav_card(slug: str, ico: str, title: str, desc: str, col: str, rgb: str) -> str:
+    return (
+        f'<a href="/{slug}" class="nav-card">'
+        f'<div class="nav-card-inner">'
+        f'<div class="nav-icon" style="background:rgba({rgb},0.1);color:{col};">{ico}</div>'
+        f'<div style="flex:1;min-width:0;">'
+        f'<div style="font-weight:700;color:#e2e8f0;font-size:0.88rem;letter-spacing:-0.01em;">{title}</div>'
+        f'<div style="color:#4b5563;font-size:0.72rem;margin-top:2px;'
+        f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{desc}</div>'
+        f'</div>'
+        f'<svg width="16" height="16" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;color:#374151;" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>'
+        f'</div></a>'
+    )
 
 # ── TABS ────────────────────────────────────────────────────────────────────────
 t_home, t_signals, t_news, t_screener, t_tools = st.tabs([
@@ -267,7 +310,8 @@ with t_home:
     st.markdown(
         f'<div style="font-size:0.68rem;font-weight:700;color:#475569;'
         f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">'
-        f'{"Today\'s Signals — " + str(len(today_sigs)) + " ideas" if today_sigs else "No signals logged today"}</div>',
+        + (f"Today's Signals — {len(today_sigs)} ideas" if today_sigs else "No signals logged today")
+        + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -298,7 +342,14 @@ with t_home:
         ])
         st.markdown(f'<div class="h-scroll">{sig_cards_html}</div>', unsafe_allow_html=True)
         st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
-        st.page_link("pages/7_Signal_Log.py", label="View full journal →")
+        st.markdown(
+            '<a href="/Signal_Log" style="display:inline-flex;align-items:center;gap:6px;'
+            'margin-top:8px;text-decoration:none;color:#7c83fd;font-size:0.78rem;font-weight:600;">'
+            'View full journal'
+            '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>'
+            '</a>',
+            unsafe_allow_html=True,
+        )
     else:
         st.markdown(
             '<div class="feed-card" style="text-align:center;padding:24px;">'
@@ -370,30 +421,16 @@ with t_home:
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_signals:
     st.markdown(
-        '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
-        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">Trade Signal Tools</div>',
+        '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;">Trade Signal Tools</div>',
         unsafe_allow_html=True,
     )
-    _sig_tools = [
-        ("💹", "Swing Trades", "2–5 day setups · 6 strategies · entry/SL/targets",
-         "#00c896", "0,200,150", "pages/5_Swing_Trades.py"),
-        ("⚡", "Intraday Ideas", "ORB · VWAP · EMA · Supertrend · live during market hours",
-         "#60a5fa", "96,165,250", "pages/6_Intraday_Ideas.py"),
-        ("📋", "Signal Journal", "Full trade log · win rate · P&L · strategy performance",
-         "#7c83fd", "124,131,253", "pages/7_Signal_Log.py"),
-    ]
-    for icon, title, desc, col, rgb, page in _sig_tools:
-        st.markdown(
-            f'<div class="feed-card" style="border-left:4px solid {col};">'
-            f'<div style="display:flex;align-items:center;gap:12px;">'
-            f'<span style="font-size:1.8rem;">{icon}</span>'
-            f'<div><div style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{title}</div>'
-            f'<div style="color:#475569;font-size:0.78rem;margin-top:3px;">{desc}</div></div>'
-            f'</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.page_link(page, label=f"Open {title} →")
-        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
+    for _slug, _ico, _title, _desc, _col, _rgb in [
+        ("Swing_Trades",  _SVG["swing"],  "Swing Trades",  "2–5 day setups · 6 strategies · entry, SL & targets", "#00c896", "0,200,150"),
+        ("Intraday_Ideas",_SVG["intra"],  "Intraday Ideas","ORB · VWAP · EMA crossover · live during market hours","#60a5fa","96,165,250"),
+        ("Signal_Log",    _SVG["log"],    "Signal Journal","Trade log · win rate · P&L · strategy performance",    "#7c83fd","124,131,253"),
+    ]:
+        st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 3 — NEWS                                                               ║
@@ -436,83 +473,47 @@ with t_news:
             )
     else:
         st.info("News unavailable — check connection.")
-    st.page_link("pages/2_News_Sentiment.py", label="Full AI Sentiment Analysis →")
+    st.markdown(
+        '<a href="/News_Sentiment" style="display:inline-flex;align-items:center;gap:6px;'
+        'margin-top:8px;text-decoration:none;color:#60a5fa;font-size:0.78rem;font-weight:600;">'
+        'Full AI Sentiment Analysis'
+        '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>'
+        '</a>',
+        unsafe_allow_html=True,
+    )
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 4 — SCREENER                                                           ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_screener:
     st.markdown(
-        '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
-        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">Stock Screeners</div>',
+        '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;">Stock Screeners</div>',
         unsafe_allow_html=True,
     )
-    _screeners = [
-        ("🔍", "Fundamental Screener",
-         "PE · ROE · Debt/Equity · Dividend Yield · Margin across Nifty 200",
-         "#f0b429", "pages/3_Fundamental_Screener.py",
-         ["Value Picks", "Quality Compounders", "Dividend Stars"]),
-        ("📈", "Technical Screener",
-         "RSI · MACD · Golden Cross · Volume Breakout · Trend analysis",
-         "#60a5fa", "pages/4_Technical_Screener.py",
-         ["Oversold", "Breakout", "Golden Cross", "Momentum"]),
-        ("📊", "Market Overview",
-         "Live indices · Sector heatmap · Market breadth · Top gainers/losers",
-         "#00c896", "pages/1_Market_Overview.py",
-         ["Nifty 50", "Bank Nifty", "Sensex"]),
-    ]
-    for icon, title, desc, col, page, tags in _screeners:
-        tags_html = " ".join([
-            f'<span style="background:rgba(255,255,255,0.05);color:#475569;'
-            f'border-radius:4px;padding:2px 7px;font-size:0.62rem;font-weight:600;">{t}</span>'
-            for t in tags
-        ])
-        st.markdown(
-            f'<div class="feed-card" style="border-top:3px solid {col};">'
-            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
-            f'<span style="font-size:1.6rem;">{icon}</span>'
-            f'<div style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{title}</div>'
-            f'</div>'
-            f'<div style="color:#475569;font-size:0.78rem;margin-bottom:10px;">{desc}</div>'
-            f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{tags_html}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        st.page_link(page, label=f"Open {title} →")
-        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
+    for _slug, _ico, _title, _desc, _col, _rgb in [
+        ("Fundamental_Screener", _SVG["fund"],  "Fundamental Screener","PE · ROE · Debt/Equity · Dividend Yield · Margins","#f0b429","240,180,41"),
+        ("Technical_Screener",   _SVG["tech"],  "Technical Screener",  "RSI · MACD · Golden Cross · Volume Breakout",       "#60a5fa","96,165,250"),
+        ("Market_Overview",      _SVG["globe"], "Market Overview",     "Live indices · Sector heatmap · Breadth · Movers",  "#00c896","0,200,150"),
+    ]:
+        st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 5 — TOOLS                                                              ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_tools:
     st.markdown(
-        '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
-        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">Utility Tools</div>',
+        '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;">Utility Tools</div>',
         unsafe_allow_html=True,
     )
-    _tools = [
-        ("🛡️", "Tip Analyzer",
-         "Paste any WhatsApp/Telegram stock tip — AI scores it for pump-and-dump risk",
-         "#ff4d6d", "pages/8_Tip_Analyzer.py"),
-        ("📋", "Signal Journal",
-         "Full trade log with P&L, win rate, strategy breakdown and CSV export",
-         "#7c83fd", "pages/7_Signal_Log.py"),
-        ("📰", "News & Sentiment",
-         "Claude AI analyses market news — summary, sector outlook, catalysts & risks",
-         "#7c83fd", "pages/2_News_Sentiment.py"),
-    ]
-    for icon, title, desc, col, page in _tools:
-        st.markdown(
-            f'<div class="feed-card" style="border-left:4px solid {col};">'
-            f'<div style="display:flex;align-items:center;gap:12px;">'
-            f'<span style="font-size:1.8rem;">{icon}</span>'
-            f'<div><div style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{title}</div>'
-            f'<div style="color:#475569;font-size:0.78rem;margin-top:3px;">{desc}</div></div>'
-            f'</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.page_link(page, label=f"Open {title} →")
-        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
+    for _slug, _ico, _title, _desc, _col, _rgb in [
+        ("Tip_Analyzer",  _SVG["shield"], "Tip Analyzer",    "Score any WhatsApp/Telegram tip for pump-and-dump risk","#ff4d6d","255,77,109"),
+        ("Signal_Log",    _SVG["log"],    "Signal Journal",  "Trade log with P&L, win rate, strategy breakdown & CSV", "#7c83fd","124,131,253"),
+        ("News_Sentiment",_SVG["news"],   "News & Sentiment","AI analysis of market news, sector outlook & catalysts",  "#60a5fa","96,165,250"),
+    ]:
+        st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
+
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.markdown(
