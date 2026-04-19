@@ -8,7 +8,20 @@ from data.news_fetcher import fetch_market_news, format_news_for_claude
 from analysis.technical import compute_indicators
 from analysis.sentiment import analyze_market_sentiment
 from signals.swing_signals import generate_swing_signals
-from ui.components import signal_card, _STRATEGY_COLORS
+from ui.components import signal_card
+
+_STRATEGY_COLORS = {
+    "Trend Pullback":         "#7c83fd",
+    "Volume Breakout":        "#f0b429",
+    "Oversold Reversal":      "#a855f7",
+    "Bullish Setup":          "#00c896",
+    "Golden Cross":           "#fbbf24",
+    "Supertrend Reversal":    "#06b6d4",
+    "Opening Range Breakout": "#10b981",
+    "VWAP Bounce":            "#f472b6",
+    "EMA Crossover":          "#60a5fa",
+    "Supertrend Signal":      "#8b5cf6",
+}
 from ui.charts import candlestick_chart, rsi_macd_chart
 from config.stock_universe import NIFTY_50, NIFTY_200
 
