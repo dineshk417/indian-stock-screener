@@ -280,10 +280,10 @@ def generate_swing_signals(
     diverse.sort(key=lambda s: (s.confidence, s.technical_score + s.fundamental_score), reverse=True)
 
     try:
-        from data.market_status import is_trading_day
-        if is_trading_day():
-            from signals.signal_logger import get_signal_logger
-            get_signal_logger().log_signals(diverse)
+        from signals.signal_logger import get_signal_logger
+        n_logged = get_signal_logger().log_signals(diverse)
+        logger.info(f"Swing signal log: {n_logged} new signals persisted")
+        if n_logged > 0:
             try:
                 from notifications.telegram import notify_swing_signals
                 notify_swing_signals(diverse)

@@ -30,9 +30,6 @@ def _catchup_signals():
     now = datetime.now(ist)
     today = date.today().isoformat()
 
-    if not is_trading_day() or now.hour < 9 or (now.hour == 9 and now.minute < 30):
-        return
-
     try:
         from signals.signal_logger import get_signal_logger
         existing = get_signal_logger().get_signals(days_back=1)
@@ -44,12 +41,14 @@ def _catchup_signals():
     def _generate():
         try:
             from signals.swing_signals import generate_swing_signals
-            from signals.intraday_signals import generate_intraday_signals
             from config.stock_universe import NIFTY_50
             tickers = list(NIFTY_50.values())
             generate_swing_signals(tickers)
-            if now.hour < 15 or (now.hour == 15 and now.minute < 30):
-                generate_intraday_signals(tickers)
+            # Intraday signals only make sense on live trading days
+            if is_trading_day() and (now.hour > 9 or (now.hour == 9 and now.minute >= 30)):
+                if now.hour < 15 or (now.hour == 15 and now.minute < 30):
+                    from signals.intraday_signals import generate_intraday_signals
+                    generate_intraday_signals(tickers)
         except Exception as e:
             logger.error(f"Catch-up signal generation failed: {e}")
 
