@@ -384,16 +384,22 @@ with t_signals:
     ]
     for icon, title, desc, col, rgb, page in _sig_tools:
         st.markdown(
-            f'<div class="feed-card" style="border-left:4px solid {col};">'
-            f'<div style="display:flex;align-items:center;gap:12px;">'
-            f'<span style="font-size:1.8rem;">{icon}</span>'
-            f'<div><div style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{title}</div>'
-            f'<div style="color:#475569;font-size:0.78rem;margin-top:3px;">{desc}</div></div>'
-            f'</div></div>',
+            f'<div style="background:linear-gradient(145deg,#141828,#0f1420);'
+            f'border:1px solid rgba(255,255,255,0.07);border-radius:14px;'
+            f'display:flex;align-items:center;gap:14px;padding:14px 18px;margin-bottom:2px;">'
+            f'<div style="width:42px;height:42px;min-width:42px;border-radius:12px;'
+            f'background:rgba({rgb},0.12);display:flex;align-items:center;'
+            f'justify-content:center;font-size:1.3rem;">{icon}</div>'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div style="font-weight:700;color:#f1f5f9;font-size:0.88rem;">{title}</div>'
+            f'<div style="color:#475569;font-size:0.72rem;margin-top:2px;'
+            f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{desc}</div>'
+            f'</div>'
+            f'<div style="color:#374151;font-size:1.1rem;flex-shrink:0;">›</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
         st.page_link(page, label=f"Open {title} →")
-        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 3 — NEWS                                                               ║
@@ -436,6 +442,7 @@ with t_news:
             )
     else:
         st.info("News unavailable — check connection.")
+    st.markdown('<div style="margin-top:4px;"></div>', unsafe_allow_html=True)
     st.page_link("pages/2_News_Sentiment.py", label="Full AI Sentiment Analysis →")
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -461,25 +468,30 @@ with t_screener:
          "#00c896", "pages/1_Market_Overview.py",
          ["Nifty 50", "Bank Nifty", "Sensex"]),
     ]
+    _screener_rgb = {"#f0b429": "240,180,41", "#60a5fa": "96,165,250", "#00c896": "0,200,150"}
     for icon, title, desc, col, page, tags in _screeners:
+        rgb = _screener_rgb.get(col, "255,255,255")
         tags_html = " ".join([
-            f'<span style="background:rgba(255,255,255,0.05);color:#475569;'
-            f'border-radius:4px;padding:2px 7px;font-size:0.62rem;font-weight:600;">{t}</span>'
+            f'<span style="background:rgba({rgb},0.08);color:{col};'
+            f'border-radius:10px;padding:1px 8px;font-size:0.6rem;font-weight:700;">{t}</span>'
             for t in tags
         ])
         st.markdown(
-            f'<div class="feed-card" style="border-top:3px solid {col};">'
-            f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
-            f'<span style="font-size:1.6rem;">{icon}</span>'
-            f'<div style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{title}</div>'
-            f'</div>'
-            f'<div style="color:#475569;font-size:0.78rem;margin-bottom:10px;">{desc}</div>'
+            f'<div style="background:linear-gradient(145deg,#141828,#0f1420);'
+            f'border:1px solid rgba(255,255,255,0.07);border-radius:14px;'
+            f'display:flex;align-items:center;gap:14px;padding:14px 18px;margin-bottom:2px;">'
+            f'<div style="width:42px;height:42px;min-width:42px;border-radius:12px;'
+            f'background:rgba({rgb},0.12);display:flex;align-items:center;'
+            f'justify-content:center;font-size:1.3rem;">{icon}</div>'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div style="font-weight:700;color:#f1f5f9;font-size:0.88rem;margin-bottom:3px;">{title}</div>'
             f'<div style="display:flex;flex-wrap:wrap;gap:4px;">{tags_html}</div>'
+            f'</div>'
+            f'<div style="color:#374151;font-size:1.1rem;flex-shrink:0;">›</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
         st.page_link(page, label=f"Open {title} →")
-        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 5 — TOOLS                                                              ║
@@ -493,26 +505,32 @@ with t_tools:
     _tools = [
         ("🛡️", "Tip Analyzer",
          "Paste any WhatsApp/Telegram stock tip — AI scores it for pump-and-dump risk",
-         "#ff4d6d", "pages/8_Tip_Analyzer.py"),
+         "#ff4d6d", "255,77,109", "pages/8_Tip_Analyzer.py"),
         ("📋", "Signal Journal",
          "Full trade log with P&L, win rate, strategy breakdown and CSV export",
-         "#7c83fd", "pages/7_Signal_Log.py"),
+         "#7c83fd", "124,131,253", "pages/7_Signal_Log.py"),
         ("📰", "News & Sentiment",
          "Claude AI analyses market news — summary, sector outlook, catalysts & risks",
-         "#7c83fd", "pages/2_News_Sentiment.py"),
+         "#60a5fa", "96,165,250", "pages/2_News_Sentiment.py"),
     ]
-    for icon, title, desc, col, page in _tools:
+    for icon, title, desc, col, rgb, page in _tools:
         st.markdown(
-            f'<div class="feed-card" style="border-left:4px solid {col};">'
-            f'<div style="display:flex;align-items:center;gap:12px;">'
-            f'<span style="font-size:1.8rem;">{icon}</span>'
-            f'<div><div style="font-weight:700;color:#f1f5f9;font-size:0.95rem;">{title}</div>'
-            f'<div style="color:#475569;font-size:0.78rem;margin-top:3px;">{desc}</div></div>'
-            f'</div></div>',
+            f'<div style="background:linear-gradient(145deg,#141828,#0f1420);'
+            f'border:1px solid rgba(255,255,255,0.07);border-radius:14px;'
+            f'display:flex;align-items:center;gap:14px;padding:14px 18px;margin-bottom:2px;">'
+            f'<div style="width:42px;height:42px;min-width:42px;border-radius:12px;'
+            f'background:rgba({rgb},0.12);display:flex;align-items:center;'
+            f'justify-content:center;font-size:1.3rem;">{icon}</div>'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div style="font-weight:700;color:#f1f5f9;font-size:0.88rem;">{title}</div>'
+            f'<div style="color:#475569;font-size:0.72rem;margin-top:2px;'
+            f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{desc}</div>'
+            f'</div>'
+            f'<div style="color:#374151;font-size:1.1rem;flex-shrink:0;">›</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
         st.page_link(page, label=f"Open {title} →")
-        st.markdown('<div style="margin-bottom:4px;"></div>', unsafe_allow_html=True)
 
 # ── FOOTER ─────────────────────────────────────────────────────────────────────
 st.markdown(

@@ -267,20 +267,32 @@ hr { border-color: rgba(255,255,255,0.06) !important; margin: 1rem 0 !important;
     border-radius: 4px !important;
 }
 
-/* ── Page nav links ───────────────────────────────────────────────────────── */
+/* ── Page nav links — compact chip (main content) ─────────────────────────── */
 a[data-testid="stPageLink-NavLink"] {
-    background: linear-gradient(145deg, #1a1f35, #141828) !important;
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    border-radius: 12px !important;
-    padding: 12px 16px !important;
-    margin-bottom: 6px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.09) !important;
+    border-radius: 20px !important;
+    padding: 5px 14px !important;
+    font-size: 0.72rem !important;
     font-weight: 600 !important;
-    transition: all 0.18s ease !important;
+    color: #64748b !important;
+    letter-spacing: 0.02em !important;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease !important;
+    margin-bottom: 12px !important;
+    box-shadow: none !important;
+    transform: none !important;
 }
 a[data-testid="stPageLink-NavLink"]:hover {
-    border-color: rgba(240,180,41,0.4) !important;
-    transform: translateX(3px) !important;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.2) !important;
+    color: #f0b429 !important;
+    border-color: rgba(240,180,41,0.35) !important;
+    background: rgba(240,180,41,0.05) !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
