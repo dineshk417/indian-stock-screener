@@ -61,6 +61,21 @@ try:
     _gl().purge_non_trading_day_signals()
 except Exception:
     pass
+
+# Bootstrap price store on first deploy (runs once in background; no-op if up to date)
+@st.cache_resource
+def _warm_price_store():
+    def _bg():
+        try:
+            from data.price_store import warm, ticker_count
+            from config.stock_universe import NIFTY_200
+            if ticker_count() < 10:   # only bootstrap when store is empty/near-empty
+                warm(list(NIFTY_200.values()))
+        except Exception as e:
+            logger.warning(f"Price store bootstrap failed: {e}")
+    threading.Thread(target=_bg, daemon=True).start()
+
+_warm_price_store()
 _catchup_signals()
 
 st.set_page_config(

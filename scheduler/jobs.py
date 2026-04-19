@@ -132,17 +132,30 @@ def run_closing_update():
     _send_market_update("Market Closing Summary")
 
 
+def run_price_warmup():
+    """8:30 AM IST — Pre-fetch all daily OHLCV into SQLite price store before scans start."""
+    logger.info(f"[{datetime.now(IST)}] Running price store warm-up...")
+    try:
+        from data.price_store import warm
+        from config.stock_universe import NIFTY_200
+        tickers = list(NIFTY_200.values())
+        written = warm(tickers)
+        logger.info(f"Price store warm-up done: {written} new rows.")
+    except Exception as e:
+        logger.error(f"Price store warm-up failed: {e}")
+
+
 def run_intraday_refresh():
-    """Every 5 min during 9:15–15:30 IST — Refresh prices and check open intraday positions."""
+    """Every 5 min during 9:15–15:30 IST — Refresh intraday prices and check open positions."""
     if not is_trading_day():
         return
     logger.info(f"[{datetime.now(IST)}] Running intraday refresh...")
     try:
         from data.cache_manager import get_cache
         cache = get_cache()
-        # Invalidate intraday price caches so fresh data is fetched on next access
-        cache.invalidate_pattern("price:")
-        logger.info("Intraday cache invalidated.")
+        # Only invalidate 5-minute intraday caches — daily price store is NOT touched
+        cache.invalidate_pattern(":5m")
+        logger.info("Intraday (5m) cache invalidated.")
     except Exception as e:
         logger.error(f"Intraday refresh failed: {e}")
 
@@ -194,6 +207,14 @@ def build_scheduler() -> BackgroundScheduler:
     # misfire_grace_time=1800 → job still runs if fired up to 30 min late
     # (handles GitHub Actions delays of up to ~15 min on free tier)
     GRACE = 1800
+
+    # Price store warm-up: 8:30 AM IST Mon-Fri (runs every day, not just trading days)
+    # Incremental — only fetches missing days, takes ~2s after first bootstrap
+    scheduler.add_job(
+        run_price_warmup,
+        CronTrigger(hour=8, minute=30, day_of_week="0-4", timezone=IST),
+        id="price_warmup", replace_existing=True, misfire_grace_time=GRACE,
+    )
 
     # Pre-market: 8:45 AM IST Mon-Fri — fetch news + generate swing signals
     scheduler.add_job(
