@@ -55,6 +55,15 @@ def _catchup_signals():
     threading.Thread(target=_generate, daemon=True).start()
 
 
+st.set_page_config(
+    page_title="ShareSaathi — AI Stock Analysis",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={"About": "ShareSaathi — AI-powered stock analysis for Indian retail investors."},
+)
+
+# All st.cache_resource calls MUST come after set_page_config
 _start_scheduler()
 try:
     from signals.signal_logger import get_signal_logger as _gl
@@ -77,14 +86,6 @@ def _warm_price_store():
 
 _warm_price_store()
 _catchup_signals()
-
-st.set_page_config(
-    page_title="ShareSaathi — AI Stock Analysis",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={"About": "ShareSaathi — AI-powered stock analysis for Indian retail investors."},
-)
 
 from ui.styles import inject_global_css
 inject_global_css()
