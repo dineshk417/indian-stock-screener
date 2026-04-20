@@ -154,15 +154,29 @@ def _resolve_intraday(signal: dict) -> Optional[dict]:
     now_ist     = datetime.now(IST)
     today_str   = now_ist.strftime("%Y-%m-%d")
 
-    # Past-date intraday signals: mark squared off at entry (no data)
+    # Past-date intraday signals: square off at actual EOD daily close
     if signal_date < today_str:
+        daily_df = fetch_single_stock(
+            signal["ticker"],
+            period="5d",
+            interval=YFINANCE_INTERVAL_DAILY,
+            use_cache=True,
+        )
+        eod_price = signal["entry_price"]  # fallback
+        if daily_df is not None and not daily_df.empty:
+            # Find the candle closest to (but not after) signal_date
+            daily_df.index = pd.to_datetime(daily_df.index)
+            signal_dt = pd.Timestamp(signal_date)
+            past = daily_df[daily_df.index.normalize() <= signal_dt]
+            if not past.empty:
+                eod_price = float(past["Close"].iloc[-1])
         return {
             "outcome":      OUTCOME_SQUARED_OFF,
-            "price":        signal["entry_price"],
+            "price":        eod_price,
             "at":           f"{signal_date} 15:30:00",
             "max_gain_pct": None,
             "max_loss_pct": None,
-            "pnl_r":        0.0,
+            "pnl_r":        _pnl_r(signal["entry_price"], signal["stop_loss"], eod_price, signal["direction"]),
         }
 
     # Define market_close early — needed in the fallback path below
