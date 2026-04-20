@@ -146,11 +146,16 @@ now_ist   = _dt.datetime.now(IST)
 _last_resolve   = st.session_state.get("_last_resolve_ts", 0)
 _should_resolve = (time.time() - _last_resolve) > 300
 
+# Always resolve immediately if there are stale signals from previous days
+_open_all_check = log.get_open_signals()
+_has_stale = any(s["signal_date"] < today_str for s in _open_all_check)
+if _has_stale:
+    _should_resolve = True
+
 _n_resolved = 0
 if _should_resolve:
-    open_all = log.get_open_signals()
     st.session_state["_last_resolve_ts"] = time.time()
-    if open_all:
+    if _open_all_check:
         try:
             from signals.outcome_tracker import update_open_signal_outcomes
             _n_resolved = update_open_signal_outcomes(position_size_inr=float(position_size))

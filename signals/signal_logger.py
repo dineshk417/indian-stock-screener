@@ -516,11 +516,19 @@ class SignalLogger:
         }
 
     def purge_non_trading_day_signals(self) -> int:
+        """
+        Purge INTRADAY-only signals logged on weekends/holidays.
+        SWING signals are intentionally kept — they're generated on any day and
+        tracked across multiple calendar days including non-trading ones.
+        """
         from data.market_status import ALL_HOLIDAYS
         deleted = 0
         try:
             with self._db_conn() as conn:
-                cur = self._exec(conn, "SELECT DISTINCT signal_date FROM signal_log")
+                cur = self._exec(
+                    conn,
+                    "SELECT DISTINCT signal_date FROM signal_log WHERE timeframe='INTRADAY'",
+                )
                 dates = cur.fetchall()
                 for row in dates:
                     d_str = row["signal_date"]
@@ -529,12 +537,16 @@ class SignalLogger:
                     except ValueError:
                         continue
                     if d.weekday() >= 5 or d in ALL_HOLIDAYS:
-                        c = self._exec(conn, "DELETE FROM signal_log WHERE signal_date=?", (d_str,))
+                        c = self._exec(
+                            conn,
+                            "DELETE FROM signal_log WHERE signal_date=? AND timeframe='INTRADAY'",
+                            (d_str,),
+                        )
                         deleted += c.rowcount
         except Exception as exc:
             logger.error(f"purge_non_trading_day_signals failed: {exc}")
         if deleted:
-            logger.info(f"Purged {deleted} signal(s) from non-trading days.")
+            logger.info(f"Purged {deleted} intraday signal(s) from non-trading days.")
         return deleted
 
 
