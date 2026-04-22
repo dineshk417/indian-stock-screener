@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Opening range is defined as first N candles of the session
 OPENING_RANGE_CANDLES = 3   # First 15 min = 3 x 5-min candles
+MIN_INTRADAY_SL_PCT   = 1.0  # Reject signals with SL tighter than 1% from entry
 
 
 def _get_opening_range(df: pd.DataFrame) -> tuple[float, float]:
@@ -364,6 +365,11 @@ def generate_intraday_signals(
             try:
                 signal = strategy_fn(ticker, df, fund_info)
                 if signal:
+                    if signal.stop_loss_pct < MIN_INTRADAY_SL_PCT:
+                        logger.debug(
+                            f"Skipping {ticker} ({signal.strategy}): SL {signal.stop_loss_pct:.2f}% < {MIN_INTRADAY_SL_PCT}%"
+                        )
+                        continue
                     signals.append(signal)
                     break  # One signal per stock
             except Exception as e:
