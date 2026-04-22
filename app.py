@@ -78,6 +78,34 @@ inject_global_css()
 
 from signals.signal_logger import get_signal_logger
 
+# ── Data helpers (module-level so @st.cache_data hashes reliably) ──────────────
+@st.cache_data(ttl=300)
+def _quick_stats():
+    try:
+        log     = get_signal_logger()
+        perf    = log.get_performance_summary(days_back=30)
+        today   = _dt.date.today().isoformat()
+        today_s = log.get_signals(days_back=1)
+        today_count = sum(1 for s in today_s if s.get("signal_date") == today)
+        return {
+            "today": today_count,
+            "open":  perf.get("open", 0),
+            "wr":    perf.get("win_rate", 0),
+            "total": perf.get("total", 0),
+        }
+    except Exception:
+        return {"today": 0, "open": 0, "wr": 0, "total": 0}
+
+
+@st.cache_data(ttl=180)
+def _today_signals():
+    try:
+        log   = get_signal_logger()
+        today = _dt.date.today().isoformat()
+        return [s for s in log.get_signals(days_back=1) if s.get("signal_date") == today]
+    except Exception:
+        return []
+
 # Inject horizontal-scroll CSS
 st.markdown("""
 <style>
@@ -243,23 +271,6 @@ with t_home:
         )
 
     # ── QUICK STAT CARDS (horizontal scroll) ───────────────────────────────────
-    @st.cache_data(ttl=300)
-    def _quick_stats():
-        try:
-            log     = get_signal_logger()
-            perf    = log.get_performance_summary(days_back=30)
-            today   = _dt.date.today().isoformat()
-            today_s = log.get_signals(days_back=1)
-            today_count = sum(1 for s in today_s if s.get("signal_date") == today)
-            return {
-                "today": today_count,
-                "open":  perf.get("open", 0),
-                "wr":    perf.get("win_rate", 0),
-                "total": perf.get("total", 0),
-            }
-        except Exception:
-            return {"today": 0, "open": 0, "wr": 0, "total": 0}
-
     qs = _quick_stats()
 
     _cards = [
@@ -293,15 +304,6 @@ with t_home:
     st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
 
     # ── TODAY'S SIGNALS FEED ───────────────────────────────────────────────────
-    @st.cache_data(ttl=180)
-    def _today_signals():
-        try:
-            log   = get_signal_logger()
-            today = _dt.date.today().isoformat()
-            return [s for s in log.get_signals(days_back=1) if s.get("signal_date") == today]
-        except Exception:
-            return []
-
     today_sigs = _today_signals()
     _STRAT_COLORS = {
         "Trend Pullback": "#7c83fd", "Volume Breakout": "#f0b429",
