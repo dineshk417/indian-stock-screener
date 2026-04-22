@@ -380,10 +380,10 @@ class SignalLogger:
 
     def get_open_signals(self, timeframe: Optional[str] = None) -> list[dict]:
         if timeframe:
-            sql    = "SELECT * FROM signal_log WHERE outcome=? AND timeframe=? ORDER BY logged_at ASC"
+            sql    = "SELECT * FROM signal_log WHERE outcome=? AND timeframe=? ORDER BY logged_at DESC"
             params = (OUTCOME_OPEN, timeframe)
         else:
-            sql    = "SELECT * FROM signal_log WHERE outcome=? ORDER BY logged_at ASC"
+            sql    = "SELECT * FROM signal_log WHERE outcome=? ORDER BY logged_at DESC"
             params = (OUTCOME_OPEN,)
         with self._db_conn() as conn:
             cur = self._exec(conn, sql, params)
