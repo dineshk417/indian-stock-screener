@@ -65,47 +65,65 @@ def signal_card(signal_dict: dict):
         for i in range(5)
     ])
 
-    # Price ladder bar — proportional positions SL → Entry → T1 → T2
+    # Price ladder bar — works for both LONG and SHORT
+    # LONG:  stop < entry < t1 < t2  →  left=SL(red)  right=T2(green)
+    # SHORT: t2 < t1 < entry < stop  →  left=T2(green) right=SL(red), inverted
     bar_html = ""
-    if t2 > stop and entry > stop and t2 > entry:
-        total = t2 - stop
-        ep   = max(8,  min(85, (entry - stop) / total * 100))
-        tp1  = max(ep + 8, min(93, (t1 - stop) / total * 100))
+    _long_valid  = is_long  and (t2 > entry > stop > 0)
+    _short_valid = not is_long and (t2 < t1 < entry < stop)
+
+    if _long_valid or _short_valid:
+        if _long_valid:
+            total = t2 - stop
+            ep    = max(8, min(82, (entry - stop) / total * 100))
+            tp1   = max(ep + 6, min(92, (t1 - stop) / total * 100))
+            # gradient: red → amber → green
+            grad  = (f'rgba(255,77,109,0.55) 0%,rgba(255,77,109,0.55) {ep:.1f}%,'
+                     f'rgba(240,180,41,0.45) {ep:.1f}%,rgba(240,180,41,0.45) {tp1:.1f}%,'
+                     f'rgba(0,200,150,0.55) {tp1:.1f}%,rgba(0,200,150,0.55) 100%')
+            left_label  = (f'<div style="font-size:0.6rem;color:#ff4d6d;font-weight:700;letter-spacing:0.05em;">SL</div>'
+                           f'<div style="font-size:0.72rem;color:#ff4d6d;font-weight:600;">₹{stop:,.0f}</div>'
+                           f'<div style="font-size:0.62rem;color:rgba(255,77,109,0.65);">−{sl_pct:.1f}%</div>')
+            right_label = (f'<div style="font-size:0.6rem;color:#4ade80;font-weight:700;letter-spacing:0.05em;">T2</div>'
+                           f'<div style="font-size:0.72rem;color:#4ade80;font-weight:600;">₹{t2:,.0f}</div>'
+                           f'<div style="font-size:0.62rem;color:rgba(74,222,128,0.65);">+{t2_pct:.1f}%</div>')
+            t1_label    = (f'<div style="font-size:0.6rem;color:#00c896;font-weight:700;letter-spacing:0.05em;">T1</div>'
+                           f'<div style="font-size:0.72rem;color:#00c896;font-weight:600;">₹{t1:,.0f}</div>'
+                           f'<div style="font-size:0.62rem;color:rgba(0,200,150,0.65);">+{t1_pct:.1f}%</div>')
+        else:  # SHORT — mirror: left=T2(best), right=SL(worst)
+            total = stop - t2
+            ep    = max(8, min(82, (stop - entry) / total * 100))
+            tp1   = max(ep + 6, min(92, (stop - t1) / total * 100))
+            # gradient: green(T2 left) → amber → red(SL right)
+            grad  = (f'rgba(0,200,150,0.55) 0%,rgba(0,200,150,0.55) {tp1:.1f}%,'
+                     f'rgba(240,180,41,0.45) {tp1:.1f}%,rgba(240,180,41,0.45) {ep:.1f}%,'
+                     f'rgba(255,77,109,0.55) {ep:.1f}%,rgba(255,77,109,0.55) 100%')
+            left_label  = (f'<div style="font-size:0.6rem;color:#4ade80;font-weight:700;letter-spacing:0.05em;">T2</div>'
+                           f'<div style="font-size:0.72rem;color:#4ade80;font-weight:600;">₹{t2:,.0f}</div>'
+                           f'<div style="font-size:0.62rem;color:rgba(74,222,128,0.65);">−{t2_pct:.1f}%</div>')
+            right_label = (f'<div style="font-size:0.6rem;color:#ff4d6d;font-weight:700;letter-spacing:0.05em;">SL</div>'
+                           f'<div style="font-size:0.72rem;color:#ff4d6d;font-weight:600;">₹{stop:,.0f}</div>'
+                           f'<div style="font-size:0.62rem;color:rgba(255,77,109,0.65);">+{sl_pct:.1f}%</div>')
+            t1_label    = (f'<div style="font-size:0.6rem;color:#00c896;font-weight:700;letter-spacing:0.05em;">T1</div>'
+                           f'<div style="font-size:0.72rem;color:#00c896;font-weight:600;">₹{t1:,.0f}</div>'
+                           f'<div style="font-size:0.62rem;color:rgba(0,200,150,0.65);">−{t1_pct:.1f}%</div>')
 
         bar_html = (
             f'<div style="margin:16px 0 6px;position:relative;">'
-            # Coloured track
             f'<div style="height:5px;border-radius:3px;overflow:hidden;">'
-            f'<div style="height:100%;background:linear-gradient(90deg,'
-            f'rgba(255,77,109,0.55) 0%,rgba(255,77,109,0.55) {ep:.1f}%,'
-            f'rgba(240,180,41,0.50) {ep:.1f}%,rgba(240,180,41,0.50) {tp1:.1f}%,'
-            f'rgba(0,200,150,0.55) {tp1:.1f}%,rgba(0,200,150,0.55) 100%);"></div>'
+            f'<div style="height:100%;background:linear-gradient(90deg,{grad});"></div>'
             f'</div>'
-            # Entry marker tick
             f'<div style="position:absolute;top:-3px;left:{ep:.1f}%;width:3px;height:11px;'
             f'background:#f1f5f9;border-radius:2px;transform:translateX(-50%);'
             f'box-shadow:0 0 4px rgba(255,255,255,0.4);"></div>'
-            # Label row
             f'<div style="position:relative;height:34px;margin-top:6px;">'
-            f'<div style="position:absolute;left:0;text-align:left;">'
-            f'<div style="font-size:0.6rem;color:#ff4d6d;font-weight:700;letter-spacing:0.05em;">SL</div>'
-            f'<div style="font-size:0.72rem;color:#ff4d6d;font-weight:600;">₹{stop:,.0f}</div>'
-            f'<div style="font-size:0.62rem;color:rgba(255,77,109,0.65);">−{sl_pct:.1f}%</div>'
-            f'</div>'
+            f'<div style="position:absolute;left:0;text-align:left;">{left_label}</div>'
             f'<div style="position:absolute;left:{ep:.1f}%;transform:translateX(-50%);text-align:center;">'
             f'<div style="font-size:0.6rem;color:#94a3b8;font-weight:700;letter-spacing:0.05em;">ENTRY</div>'
             f'<div style="font-size:0.72rem;color:#e2e8f0;font-weight:700;">₹{entry:,.0f}</div>'
             f'</div>'
-            f'<div style="position:absolute;left:{tp1:.1f}%;transform:translateX(-50%);text-align:center;">'
-            f'<div style="font-size:0.6rem;color:#00c896;font-weight:700;letter-spacing:0.05em;">T1</div>'
-            f'<div style="font-size:0.72rem;color:#00c896;font-weight:600;">₹{t1:,.0f}</div>'
-            f'<div style="font-size:0.62rem;color:rgba(0,200,150,0.65);">+{t1_pct:.1f}%</div>'
-            f'</div>'
-            f'<div style="position:absolute;right:0;text-align:right;">'
-            f'<div style="font-size:0.6rem;color:#4ade80;font-weight:700;letter-spacing:0.05em;">T2</div>'
-            f'<div style="font-size:0.72rem;color:#4ade80;font-weight:600;">₹{t2:,.0f}</div>'
-            f'<div style="font-size:0.62rem;color:rgba(74,222,128,0.65);">+{t2_pct:.1f}%</div>'
-            f'</div>'
+            f'<div style="position:absolute;left:{tp1:.1f}%;transform:translateX(-50%);text-align:center;">{t1_label}</div>'
+            f'<div style="position:absolute;right:0;text-align:right;">{right_label}</div>'
             f'</div>'
             f'</div>'
         )

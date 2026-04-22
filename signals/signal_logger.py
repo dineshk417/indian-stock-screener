@@ -145,7 +145,9 @@ _CREATE_INDEXES_SQL = [
 
 
 def _make_signal_id(signal: "TradeSignal", date_str: str) -> str:
-    raw = f"{signal.ticker}|{signal.strategy}|{signal.timeframe}|{date_str}|{signal.entry_price:.2f}"
+    # entry_price intentionally excluded — price fluctuates between scans,
+    # but ticker+strategy+timeframe+date uniquely identifies a signal for the day.
+    raw = f"{signal.ticker}|{signal.strategy}|{signal.timeframe}|{date_str}"
     return hashlib.md5(raw.encode()).hexdigest()[:20]
 
 
