@@ -76,6 +76,8 @@ _catchup_signals()
 from ui.styles import inject_global_css
 inject_global_css()
 
+from signals.signal_logger import get_signal_logger
+
 # Inject horizontal-scroll CSS
 st.markdown("""
 <style>
