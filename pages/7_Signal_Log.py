@@ -238,6 +238,24 @@ with tab_live:
                     except Exception:
                         pass
 
+                # Format entry and exit datetimes
+                _raw_entry = sig.get("logged_at") or sig.get("signal_date", "")
+                try:
+                    _entry_dt  = _dt.datetime.strptime(_raw_entry[:19], "%Y-%m-%d %H:%M:%S")
+                    _entry_fmt = _entry_dt.strftime("%d %b %Y · %H:%M IST")
+                except Exception:
+                    _entry_fmt = _raw_entry[:16] or "—"
+
+                _raw_exit  = sig.get("outcome_at") or ""
+                if _raw_exit:
+                    try:
+                        _exit_dt  = _dt.datetime.strptime(_raw_exit[:19], "%Y-%m-%d %H:%M:%S")
+                        _exit_fmt = _exit_dt.strftime("%d %b %Y · %H:%M IST")
+                    except Exception:
+                        _exit_fmt = _raw_exit[:16]
+                else:
+                    _exit_fmt = "Active"
+
                 if curr_price is not None:
                     pnl_pct = ((curr_price - entry) / entry * 100) if is_long else ((entry - curr_price) / entry * 100)
                     pnl_inr = pnl_pct / 100 * float(position_size)
@@ -278,15 +296,25 @@ with tab_live:
                         f'border-radius:14px;padding:16px 18px;margin:8px 0;">'
 
                         # Header row
-                        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
                         f'<div style="display:flex;align-items:center;gap:10px;">'
                         f'<span style="font-size:1.05rem;font-weight:800;color:#e2e8f0;">{label}</span>'
                         f'<span style="background:{dir_col}22;color:{dir_col};border:1px solid {dir_col}44;'
                         f'border-radius:5px;padding:2px 8px;font-size:0.7rem;font-weight:700;">{dir_arr}</span>'
-                        f'<span style="color:#475569;font-size:0.72rem;">{sig.get("strategy","")} · {sig.get("timeframe","")} · {days_str}</span>'
+                        f'<span style="color:#475569;font-size:0.72rem;">{sig.get("strategy","")} · {sig.get("timeframe","")}</span>'
                         f'</div>'
                         f'<span style="background:{status_c}22;color:{status_c};border:1px solid {status_c}44;'
                         f'border-radius:6px;padding:3px 12px;font-size:0.78rem;font-weight:700;">{status_l}</span>'
+                        f'</div>'
+
+                        # Entry / Exit datetime strip
+                        f'<div style="display:flex;gap:20px;margin-bottom:12px;">'
+                        f'<span style="font-size:0.68rem;color:#475569;">'
+                        f'<span style="color:#6b7a99;font-weight:600;">Entry</span> {_entry_fmt}</span>'
+                        f'<span style="font-size:0.68rem;color:#475569;">'
+                        f'<span style="color:#6b7a99;font-weight:600;">Exit</span> '
+                        f'<span style="color:{"#94a3b8" if _exit_fmt == "Active" else "#e2e8f0"};">{_exit_fmt}</span>'
+                        f'</span>'
                         f'</div>'
 
                         # Price grid
@@ -334,18 +362,25 @@ with tab_live:
                     )
                     st.markdown(html, unsafe_allow_html=True)
                 else:
-                    days_held = (_dt.date.today() - _dt.date.fromisoformat(sig["signal_date"])).days
                     st.markdown(
                         f'<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);'
                         f'border-left:4px solid {dir_col};border-radius:14px;padding:14px 18px;margin:8px 0;">'
                         f'<div style="display:flex;justify-content:space-between;align-items:center;">'
                         f'<div>'
                         f'<span style="font-size:1rem;font-weight:800;color:#e2e8f0;">{label}</span>'
-                        f'<span style="color:#6b7a99;font-size:0.75rem;margin-left:10px;">{sig.get("strategy","")} · {sig.get("timeframe","")} · {days_held}d held</span>'
+                        f'<span style="color:#6b7a99;font-size:0.75rem;margin-left:10px;">{sig.get("strategy","")} · {sig.get("timeframe","")}</span>'
                         f'</div>'
                         f'<span style="color:#6b7a99;font-size:0.78rem;">Price unavailable</span>'
                         f'</div>'
-                        f'<div style="margin-top:8px;color:#475569;font-size:0.75rem;">'
+                        f'<div style="display:flex;gap:20px;margin:6px 0;">'
+                        f'<span style="font-size:0.68rem;color:#475569;">'
+                        f'<span style="color:#6b7a99;font-weight:600;">Entry</span> {_entry_fmt}</span>'
+                        f'<span style="font-size:0.68rem;color:#475569;">'
+                        f'<span style="color:#6b7a99;font-weight:600;">Exit</span> '
+                        f'<span style="color:#94a3b8;">{_exit_fmt}</span>'
+                        f'</span>'
+                        f'</div>'
+                        f'<div style="color:#475569;font-size:0.75rem;">'
                         f'Entry ₹{entry:,.2f} · SL ₹{stop:,.2f} · T1 ₹{t1:,.2f} · T2 ₹{t2:,.2f}'
                         f'</div></div>',
                         unsafe_allow_html=True,
