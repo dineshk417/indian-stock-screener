@@ -262,6 +262,38 @@ class SignalLogger:
             except Exception:
                 pass
 
+        # One-time dedup migration: clean existing duplicate (ticker, strategy, timeframe,
+        # signal_date) rows and add a unique index so they can never recur.
+        # Sentinel: skip if the index already exists.
+        try:
+            with self._db_conn() as conn:
+                if _USE_PG:
+                    cur = self._exec(conn, """
+                        SELECT 1 FROM pg_indexes
+                        WHERE tablename='signal_log' AND indexname='idx_sl_uniq_signal'
+                    """)
+                else:
+                    cur = self._exec(conn, """
+                        SELECT 1 FROM sqlite_master
+                        WHERE type='index' AND name='idx_sl_uniq_signal'
+                    """)
+                if cur.fetchone() is None:
+                    # Delete all but the latest row per (ticker, strategy, timeframe, signal_date)
+                    self._exec(conn, """
+                        DELETE FROM signal_log
+                        WHERE id NOT IN (
+                            SELECT MAX(id) FROM signal_log
+                            GROUP BY ticker, strategy, timeframe, signal_date
+                        )
+                    """)
+                    self._exec(conn, """
+                        CREATE UNIQUE INDEX idx_sl_uniq_signal
+                        ON signal_log (ticker, strategy, timeframe, signal_date)
+                    """)
+                    logger.info("Dedup migration: removed duplicate signals and added unique index.")
+        except Exception as exc:
+            logger.warning(f"Dedup migration failed (non-fatal): {exc}")
+
     # ── Write ──────────────────────────────────────────────────────────────────
 
     def log_signal(self, signal: "TradeSignal") -> bool:
@@ -280,7 +312,8 @@ class SignalLogger:
         ph = ", ".join(["?"] * 24)
 
         if _USE_PG:
-            sql = f"INSERT INTO signal_log ({cols}) VALUES ({ph}) ON CONFLICT (signal_id) DO NOTHING"
+            sql = (f"INSERT INTO signal_log ({cols}) VALUES ({ph}) "
+                   f"ON CONFLICT (ticker, strategy, timeframe, signal_date) DO NOTHING")
         else:
             sql = f"INSERT OR IGNORE INTO signal_log ({cols}) VALUES ({ph})"
 
