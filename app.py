@@ -106,6 +106,70 @@ def _today_signals():
     except Exception:
         return []
 
+
+@st.cache_data(ttl=120)
+def _hero_indices():
+    from data.fetcher import fetch_index_data
+    from config.settings import INDICES
+    import yfinance as yf
+    results = {}
+    for name in ["Nifty 50", "Bank Nifty", "Sensex"]:
+        ticker = INDICES.get(name)
+        if not ticker:
+            continue
+        df = fetch_index_data(ticker, period="5d", interval="1d")
+        if df is None or len(df) < 2:
+            continue
+        try:
+            if is_open:
+                fi    = yf.Ticker(ticker).fast_info
+                price = float(fi.last_price)
+                prev  = float(fi.previous_close)
+                chg   = (price - prev) / prev * 100
+            else:
+                price = float(df["Close"].iloc[-1])
+                chg   = (price - float(df["Close"].iloc[-2])) / float(df["Close"].iloc[-2]) * 100
+            jan1    = _dt.date(df.index[-1].year, 1, 1)
+            ytd_df  = df[df.index.date >= jan1]
+            ytd_pct = ((price - float(ytd_df["Close"].iloc[0])) / float(ytd_df["Close"].iloc[0]) * 100
+                       if not ytd_df.empty else None)
+            results[name] = {"price": price, "chg": chg, "ytd": ytd_pct}
+        except Exception:
+            pass
+    # India VIX
+    try:
+        vix_df = fetch_index_data("^INDIAVIX", period="5d", interval="1d")
+        if vix_df is not None and len(vix_df) >= 2:
+            v_price = float(vix_df["Close"].iloc[-1])
+            v_prev  = float(vix_df["Close"].iloc[-2])
+            v_chg   = (v_price - v_prev) / v_prev * 100
+            results["VIX"] = {"price": v_price, "chg": v_chg, "ytd": None}
+    except Exception:
+        pass
+    return results
+
+
+@st.cache_data(ttl=300)
+def _movers():
+    try:
+        from data.fetcher import fetch_stock_data
+        from config.stock_universe import NIFTY_50
+        tickers = list(NIFTY_50.values())
+        price_data = fetch_stock_data(tickers, period="5d", interval="1d")
+        changes = []
+        for t, df in price_data.items():
+            if df is None or len(df) < 2:
+                continue
+            curr = float(df["Close"].iloc[-1])
+            prev = float(df["Close"].iloc[-2])
+            changes.append({"ticker": t.replace(".NS", ""), "price": curr,
+                            "chg": (curr - prev) / prev * 100})
+        changes.sort(key=lambda x: x["chg"], reverse=True)
+        return changes[:5], changes[-5:][::-1]
+    except Exception:
+        return [], []
+
+
 # Inject horizontal-scroll CSS
 st.markdown("""
 <style>
@@ -210,97 +274,119 @@ t_home, t_signals, t_news, t_screener, t_tools = st.tabs([
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_home:
 
-    # ── HERO BANNER ────────────────────────────────────────────────────────────
-    @st.cache_data(ttl=120)
-    def _hero_indices():
-        from data.fetcher import fetch_index_data
-        from config.settings import INDICES
-        import yfinance as yf
-        results = {}
-        for name in ["Nifty 50", "Bank Nifty", "Sensex"]:
-            ticker = INDICES.get(name)
-            if not ticker:
-                continue
-            df = fetch_index_data(ticker, period="5d", interval="1d")
-            if df is None or len(df) < 2:
-                continue
-            try:
-                if is_open:
-                    fi    = yf.Ticker(ticker).fast_info
-                    price = float(fi.last_price)
-                    prev  = float(fi.previous_close)
-                    chg   = (price - prev) / prev * 100
-                else:
-                    price = float(df["Close"].iloc[-1])
-                    chg   = (price - float(df["Close"].iloc[-2])) / float(df["Close"].iloc[-2]) * 100
-                results[name] = {"price": price, "chg": chg}
-            except Exception:
-                pass
-        return results
-
+    # ── MARKET PULSE ───────────────────────────────────────────────────────────
     indices = _hero_indices()
-    nifty   = indices.get("Nifty 50", {})
-    sensex  = indices.get("Sensex", {})
-    bnk     = indices.get("Bank Nifty", {})
+    qs      = _quick_stats()
 
-    if nifty:
-        n_price = nifty["price"]; n_chg = nifty["chg"]
-        n_col   = "#00c896" if n_chg >= 0 else "#ff4d6d"
-        n_arrow = "▲" if n_chg >= 0 else "▼"
-        n_bg    = "0,200,150" if n_chg >= 0 else "255,77,109"
+    def _vix_sentiment(v):
+        if v < 12:  return "VERY CALM", "#00c896", "0,200,150"
+        if v < 15:  return "CALM",      "#5AD8A6", "90,216,166"
+        if v < 20:  return "NEUTRAL",   "#f0b429", "240,180,41"
+        if v < 25:  return "ELEVATED",  "#f97316", "249,115,22"
+        return              "FEAR",     "#ff4d6d", "255,77,109"
 
-        st.markdown(
-            f'<div style="background:linear-gradient(145deg,#0d1117 0%,#111827 60%,#0d1117 100%);'
-            f'border:1px solid rgba({n_bg},0.18);border-radius:20px;'
-            f'padding:28px 28px 24px;margin-bottom:16px;position:relative;overflow:hidden;">'
-            f'<div style="position:absolute;top:-50px;right:-50px;width:220px;height:220px;'
-            f'background:radial-gradient(circle,rgba({n_bg},0.1),transparent 65%);pointer-events:none;"></div>'
-            f'<div style="position:relative;z-index:1;">'
-            f'<div style="font-size:0.65rem;font-weight:700;color:#475569;'
-            f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">NIFTY 50 · NSE</div>'
-            f'<div style="font-size:2.6rem;font-weight:900;color:#f1f5f9;'
-            f'letter-spacing:-0.04em;line-height:1;">{n_price:,.2f}</div>'
-            f'<div style="display:flex;align-items:center;gap:14px;margin-top:10px;">'
-            f'<span style="font-size:1.1rem;font-weight:700;color:{n_col};">'
-            f'{n_arrow} {abs(n_chg):.2f}% today</span>'
-            + (f'<span style="font-size:0.82rem;color:#475569;">Sensex {sensex["price"]:,.0f} '
-               f'{"▲" if sensex["chg"]>=0 else "▼"} {abs(sensex["chg"]):.2f}%</span>'
-               if sensex else "")
-            + f'</div></div></div>',
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Market Pulse</div>',
+        unsafe_allow_html=True,
+    )
 
-    # ── QUICK STAT CARDS (horizontal scroll) ───────────────────────────────────
-    qs = _quick_stats()
-
-    _cards = [
-        ("Today's Signals", str(qs["today"]),  "new",       "#f0b429", "240,180,41"),
-        ("Open Positions",  str(qs["open"]),   "tracking",  "#7c83fd", "124,131,253"),
-        ("Win Rate (30d)",  f'{qs["wr"]}%',    "closed",    "#00c896", "0,200,150"),
-        ("Total Signals",   str(qs["total"]),  "all time",  "#06b6d4", "6,182,212"),
+    _pulse_items = [
+        ("Nifty 50",   indices.get("Nifty 50",   {}), "^NSEI",  False),
+        ("Bank Nifty", indices.get("Bank Nifty",  {}), "^NSEBANK", False),
+        ("Sensex",     indices.get("Sensex",      {}), "^BSESN", False),
+        ("India VIX",  indices.get("VIX",         {}), None,    True),
     ]
-    if bnk:
-        b_col = "#00c896" if bnk["chg"] >= 0 else "#ff4d6d"
-        b_rgb = "0,200,150" if bnk["chg"] >= 0 else "255,77,109"
-        _cards.append((
-            "Bank Nifty",
-            f'{bnk["price"]:,.0f}',
-            f'{"▲" if bnk["chg"]>=0 else "▼"} {abs(bnk["chg"]):.2f}%',
-            b_col, b_rgb,
-        ))
+    pulse_cols = st.columns(4)
+    for col, (label, data, _, is_vix) in zip(pulse_cols, _pulse_items):
+        if not data:
+            with col:
+                st.markdown(
+                    f'<div style="background:#1a1f35;border:1px solid rgba(255,255,255,0.06);'
+                    f'border-radius:14px;padding:16px 18px;min-height:100px;">'
+                    f'<div style="font-size:0.6rem;color:#475569;font-weight:700;'
+                    f'text-transform:uppercase;letter-spacing:0.08em;">{label}</div>'
+                    f'<div style="color:#374151;margin-top:12px;font-size:0.8rem;">—</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            continue
 
-    cards_html = "".join([
-        f'<div style="flex-shrink:0;width:140px;background:linear-gradient(145deg,#131929,#0f1420);'
-        f'border:1px solid rgba({rgb},0.2);border-top:3px solid {col};'
-        f'border-radius:14px;padding:14px 16px;">'
-        f'<div style="font-size:0.62rem;font-weight:700;color:#475569;'
-        f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">{label}</div>'
-        f'<div style="font-size:1.35rem;font-weight:800;color:{col};letter-spacing:-0.02em;">{val}</div>'
-        f'<div style="font-size:0.65rem;color:#374151;margin-top:3px;">{sub}</div>'
-        f'</div>'
-        for label, val, sub, col, rgb in _cards
-    ])
-    st.markdown(f'<div class="h-scroll">{cards_html}</div>', unsafe_allow_html=True)
+        price = data["price"]
+        chg   = data["chg"]
+        ytd   = data.get("ytd")
+        arrow = "▲" if chg >= 0 else "▼"
+
+        if is_vix:
+            sent_l, sent_c, sent_rgb = _vix_sentiment(price)
+            c_col = sent_c
+            c_rgb = sent_rgb
+            sub_html = (
+                f'<div style="display:inline-block;background:{sent_c}22;color:{sent_c};'
+                f'border:1px solid {sent_c}44;border-radius:5px;'
+                f'padding:2px 10px;font-size:0.68rem;font-weight:700;margin-top:6px;">'
+                f'{sent_l}</div>'
+                f'<div style="font-size:0.67rem;color:#475569;margin-top:4px;">'
+                f'{arrow} {abs(chg):.2f}% today</div>'
+            )
+            price_fmt = f"{price:.2f}"
+        else:
+            c_col = "#00c896" if chg >= 0 else "#ff4d6d"
+            c_rgb = "0,200,150" if chg >= 0 else "255,77,109"
+            ytd_html = ""
+            if ytd is not None:
+                ytd_col = "#00c896" if ytd >= 0 else "#ff4d6d"
+                ytd_html = (f'<div style="font-size:0.67rem;color:{ytd_col};margin-top:2px;">'
+                            f'YTD {ytd:+.1f}%</div>')
+            sub_html = (
+                f'<div style="font-size:0.82rem;font-weight:700;color:{c_col};margin-top:5px;">'
+                f'{arrow} {abs(chg):.2f}%</div>'
+                + ytd_html
+            )
+            price_fmt = f"{price:,.0f}"
+
+        with col:
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba({c_rgb},0.2);border-top:3px solid {c_col};'
+                f'border-radius:14px;padding:16px 18px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">{label}</div>'
+                f'<div style="font-size:1.5rem;font-weight:800;color:#f1f5f9;'
+                f'letter-spacing:-0.02em;">{price_fmt}</div>'
+                + sub_html +
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
+
+    # ── YOUR SIGNALS ───────────────────────────────────────────────────────────
+    st.markdown(
+        '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Your Signals</div>',
+        unsafe_allow_html=True,
+    )
+    _sig_items = [
+        ("Today's Signals", str(qs["today"]),       "new ideas",        "#f0b429", "240,180,41"),
+        ("Open Positions",  str(qs["open"]),         "being tracked",    "#7c83fd", "124,131,253"),
+        ("Win Rate (30d)",  f'{qs["wr"]}%',          "of closed trades", "#00c896", "0,200,150"),
+        ("Total Signals",   str(qs["total"]),        "last 30 days",     "#06b6d4", "6,182,212"),
+    ]
+    sig_cols = st.columns(4)
+    for col, (label, val, sub, c, rgb) in zip(sig_cols, _sig_items):
+        with col:
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba({rgb},0.12);border-radius:14px;padding:16px 18px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">{label}</div>'
+                f'<div style="font-size:1.8rem;font-weight:800;color:{c};letter-spacing:-0.03em;">{val}</div>'
+                f'<div style="font-size:0.67rem;color:#374151;margin-top:4px;">{sub}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
     st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
 
     # ── TODAY'S SIGNALS FEED ───────────────────────────────────────────────────
@@ -367,26 +453,6 @@ with t_home:
         )
 
     # ── MARKET MOVERS ──────────────────────────────────────────────────────────
-    @st.cache_data(ttl=300)
-    def _movers():
-        try:
-            from data.fetcher import fetch_stock_data
-            from config.stock_universe import NIFTY_50
-            tickers = list(NIFTY_50.values())
-            price_data = fetch_stock_data(tickers, period="5d", interval="1d")
-            changes = []
-            for t, df in price_data.items():
-                if df is None or len(df) < 2:
-                    continue
-                curr = float(df["Close"].iloc[-1])
-                prev = float(df["Close"].iloc[-2])
-                changes.append({"ticker": t.replace(".NS",""), "price": curr,
-                                 "chg": (curr - prev) / prev * 100})
-            changes.sort(key=lambda x: x["chg"], reverse=True)
-            return changes[:4], changes[-4:][::-1]
-        except Exception:
-            return [], []
-
     gainers, losers = _movers()
 
     if gainers or losers:

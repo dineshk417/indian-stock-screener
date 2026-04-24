@@ -77,6 +77,7 @@ else:
 
 # ── Load 1Y daily history once (used for chart + YTD calc inside fragment) ────
 main_indices   = {k: v for k, v in INDICES.items() if k in ["Nifty 50", "Bank Nifty", "Sensex"]}
+_vix_ticker    = "^INDIAVIX"
 sector_indices = {k: v for k, v in INDICES.items() if k not in main_indices}
 
 hist_1y: dict = {}
@@ -84,6 +85,62 @@ for _name, _ticker in main_indices.items():
     _df = fetch_index_data(_ticker, period="1y", interval="1d")
     if _df is not None and not _df.empty:
         hist_1y[_name] = _df
+
+# ── Global Markets (cached, refreshes every 5 min) ────────────────────────────
+@st.cache_data(ttl=300)
+def _global_markets_data():
+    import yfinance as yf
+    items = [
+        ("S&P 500",  "^GSPC",    False),
+        ("Dow Jones","^DJI",     False),
+        ("Nasdaq",   "^IXIC",    False),
+        ("Crude Oil","CL=F",     True),
+        ("Gold",     "GC=F",     True),
+        ("USD/INR",  "USDINR=X", True),
+    ]
+    results = []
+    for label, ticker, is_commodity in items:
+        try:
+            df = yf.Ticker(ticker).history(period="5d", interval="1d", auto_adjust=True)
+            if df is None or len(df) < 2:
+                continue
+            price = float(df["Close"].iloc[-1])
+            prev  = float(df["Close"].iloc[-2])
+            chg   = (price - prev) / prev * 100
+            results.append({"label": label, "price": price, "chg": chg, "is_commodity": is_commodity})
+        except Exception:
+            continue
+    return results
+
+_gm = _global_markets_data()
+if _gm:
+    st.markdown(
+        '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
+        'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Global Markets</div>',
+        unsafe_allow_html=True,
+    )
+    gm_html = '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px;">'
+    for item in _gm:
+        chg   = item["chg"]
+        c     = "#00c896" if chg >= 0 else "#ff4d6d"
+        rgb   = "0,200,150" if chg >= 0 else "255,77,109"
+        arrow = "▲" if chg >= 0 else "▼"
+        price = item["price"]
+        price_fmt = f"${price:,.0f}" if not item["is_commodity"] else f"{price:,.2f}"
+        gm_html += (
+            f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+            f'border:1px solid rgba({rgb},0.15);border-radius:12px;padding:12px 14px;">'
+            f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+            f'text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">{item["label"]}</div>'
+            f'<div style="font-size:1rem;font-weight:700;color:#e2e8f0;">{price_fmt}</div>'
+            f'<div style="font-size:0.75rem;font-weight:700;color:{c};margin-top:3px;">'
+            f'{arrow} {abs(chg):.2f}%</div>'
+            f'</div>'
+        )
+    gm_html += '</div>'
+    st.markdown(gm_html, unsafe_allow_html=True)
+
+st.divider()
 
 # ── Fragment 1: major index cards — refreshes every 30 s during market ─────────
 _fast_interval = 120 if status["is_market_open"] else None
@@ -93,7 +150,7 @@ _fast_interval = 120 if status["is_market_open"] else None
 def _index_metrics():
     _live = is_market_open()
     st.subheader("Major Indices")
-    cols = st.columns(len(main_indices))
+    cols = st.columns(len(main_indices) + 1)  # +1 for VIX
 
     for col, (name, ticker) in zip(cols, main_indices.items()):
         df = hist_1y.get(name)
@@ -142,6 +199,53 @@ def _index_metrics():
                 f'</div>',
                 unsafe_allow_html=True,
             )
+
+    # VIX card (last column)
+    with cols[-1]:
+        try:
+            vix_df = fetch_index_data(_vix_ticker, period="5d", interval="1d")
+            if vix_df is not None and len(vix_df) >= 2:
+                v      = float(vix_df["Close"].iloc[-1])
+                v_prev = float(vix_df["Close"].iloc[-2])
+                v_chg  = (v - v_prev) / v_prev * 100
+                v_arr  = "▲" if v_chg >= 0 else "▼"
+                if v < 12:   sent, s_col = "VERY CALM", "#00c896"
+                elif v < 15: sent, s_col = "CALM",      "#5AD8A6"
+                elif v < 20: sent, s_col = "NEUTRAL",   "#f0b429"
+                elif v < 25: sent, s_col = "ELEVATED",  "#f97316"
+                else:        sent, s_col = "FEAR",      "#ff4d6d"
+                st.markdown(
+                    f'<div style="background:#1e2235;border-radius:12px;padding:16px 20px;'
+                    f'border:1px solid rgba(255,255,255,0.07);border-top:3px solid {s_col};'
+                    f'margin-bottom:8px;">'
+                    f'<div style="font-size:0.75rem;color:#6b7a99;font-weight:700;'
+                    f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">India VIX</div>'
+                    f'<div style="font-size:1.6rem;font-weight:800;color:#e2e8f0;'
+                    f'letter-spacing:-0.02em;">{v:.2f}</div>'
+                    f'<div style="margin-top:6px;">'
+                    f'<span style="background:{s_col}22;color:{s_col};border:1px solid {s_col}44;'
+                    f'border-radius:5px;padding:2px 10px;font-size:0.72rem;font-weight:700;">'
+                    f'{sent}</span>'
+                    f'<span style="font-size:0.8rem;color:{"#00c896" if v_chg>=0 else "#ff4d6d"};'
+                    f'font-weight:700;margin-left:8px;">{v_arr} {abs(v_chg):.2f}%</span>'
+                    f'</div>'
+                    f'<div style="font-size:0.72rem;color:#6b7a99;margin-top:4px;">'
+                    f'{"Live" if _live else str(vix_df.index[-1])[:10]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div style="background:#1e2235;border-radius:12px;padding:16px 20px;'
+                    'border:1px solid rgba(255,255,255,0.07);margin-bottom:8px;">'
+                    '<div style="font-size:0.75rem;color:#6b7a99;font-weight:700;'
+                    'text-transform:uppercase;letter-spacing:0.08em;">India VIX</div>'
+                    '<div style="color:#374151;margin-top:12px;">Unavailable</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+        except Exception:
+            pass
 
     if _live:
         _ts = _dt.datetime.now(_IST).strftime("%H:%M:%S")
