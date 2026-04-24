@@ -38,7 +38,7 @@ OUTCOME_STOPPED     = "STOPPED"
 OUTCOME_SQUARED_OFF = "SQUARED_OFF"
 OUTCOME_EXPIRED     = "EXPIRED"
 
-SWING_EXPIRY_DAYS = 14
+SWING_EXPIRY_DAYS = 7
 
 # ── Backend detection ──────────────────────────────────────────────────────────
 

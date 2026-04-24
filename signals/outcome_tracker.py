@@ -112,29 +112,36 @@ def _resolve_candles(
 
         if direction == "LONG":
             if low <= stop_loss:
-                return _result(OUTCOME_STOPPED, stop_loss, ts, entry, max_high, min_low)
+                return _result(OUTCOME_STOPPED, stop_loss, ts, entry, max_high, min_low, direction)
             if high >= target_2:
-                return _result(OUTCOME_TARGET2, target_2, ts, entry, max_high, min_low)
+                return _result(OUTCOME_TARGET2, target_2, ts, entry, max_high, min_low, direction)
             if high >= target_1:
-                return _result(OUTCOME_TARGET1, target_1, ts, entry, max_high, min_low)
+                return _result(OUTCOME_TARGET1, target_1, ts, entry, max_high, min_low, direction)
         else:  # SHORT
             if high >= stop_loss:
-                return _result(OUTCOME_STOPPED, stop_loss, ts, entry, max_high, min_low)
+                return _result(OUTCOME_STOPPED, stop_loss, ts, entry, max_high, min_low, direction)
             if low <= target_2:
-                return _result(OUTCOME_TARGET2, target_2, ts, entry, max_high, min_low)
+                return _result(OUTCOME_TARGET2, target_2, ts, entry, max_high, min_low, direction)
             if low <= target_1:
-                return _result(OUTCOME_TARGET1, target_1, ts, entry, max_high, min_low)
+                return _result(OUTCOME_TARGET1, target_1, ts, entry, max_high, min_low, direction)
 
     return None
 
 
-def _result(outcome: str, price: float, ts, entry: float, max_high: float, min_low: float) -> dict:
+def _result(outcome: str, price: float, ts, entry: float, max_high: float, min_low: float,
+            direction: str = "LONG") -> dict:
+    if direction == "LONG":
+        max_gain_pct = round((max_high - entry) / entry * 100, 2)
+        max_loss_pct = round((entry - min_low)  / entry * 100, 2)
+    else:  # SHORT — gain when price falls
+        max_gain_pct = round((entry - min_low)  / entry * 100, 2)
+        max_loss_pct = round((max_high - entry) / entry * 100, 2)
     return {
         "outcome":      outcome,
         "price":        price,
         "at":           str(ts),
-        "max_gain_pct": round((max_high - entry) / entry * 100, 2),
-        "max_loss_pct": round((entry - min_low)  / entry * 100, 2),
+        "max_gain_pct": max_gain_pct,
+        "max_loss_pct": max_loss_pct,
     }
 
 

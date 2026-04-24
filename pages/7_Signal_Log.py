@@ -93,10 +93,14 @@ if _should_res and _open_all:
         st.session_state["_last_resolve_ts"] = time.time()
         if _n:
             st.rerun()
-    except Exception:
-        pass
+    except Exception as _resolve_err:
+        st.session_state["_resolve_error"] = str(_resolve_err)
     if not _has_stale:
         st.session_state["_last_resolve_ts"] = time.time()
+
+if st.session_state.get("_resolve_error"):
+    st.warning(f"Outcome resolver error: {st.session_state['_resolve_error']}")
+    st.session_state.pop("_resolve_error", None)
 
 perf    = log.get_performance_summary(timeframe=timeframe, days_back=days_back)
 signals = log.get_signals(timeframe=timeframe, days_back=days_back)
@@ -447,6 +451,30 @@ with tab_perf:
             'Use <b style="color:#f0b429;">▶ Run Scan Now</b> above to generate signals, '
             'or change the Period filter in the sidebar.'
             '</div></div>',
+            unsafe_allow_html=True,
+        )
+    elif total_closed == 0 and perf["open"] > 0:
+        # Signals exist but nothing has closed yet — tell the user why
+        _oldest = min((s["signal_date"] for s in open_signals), default=today_str)
+        try:
+            _days_open = (_dt.date.today() - _dt.date.fromisoformat(_oldest)).days
+            from signals.signal_logger import SWING_EXPIRY_DAYS
+            _days_left = max(0, SWING_EXPIRY_DAYS - _days_open)
+            _expiry_note = (
+                f"Oldest signal is {_days_open}d old — "
+                f"{'expiring soon' if _days_left <= 1 else f'expires in ~{_days_left}d'} "
+                f"if no SL/target is hit first."
+            )
+        except Exception:
+            _expiry_note = "Signals close when SL or a target is hit, or after the expiry window."
+        st.markdown(
+            f'<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.15);'
+            f'border-radius:14px;padding:24px 28px;margin:16px 0;">'
+            f'<div style="color:#f0b429;font-weight:700;margin-bottom:6px;">⏳ {perf["open"]} open signal(s) — no closed trades yet</div>'
+            f'<div style="color:#64748b;font-size:0.82rem;line-height:1.7;">'
+            f'{_expiry_note}<br>'
+            f'Click <b style="color:#f1f5f9;">🔄 Check Outcomes Now</b> in the Live Positions tab to force-resolve any that have hit their levels.'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
     else:
