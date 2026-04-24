@@ -25,6 +25,71 @@ except Exception as _exc:
 st.set_page_config(page_title="Signal Log · ShareSaathi", layout="wide", page_icon="📋")
 from ui.styles import inject_global_css; inject_global_css()
 
+# ── Module-level helpers ───────────────────────────────────────────────────────
+@st.cache_data(ttl=600)
+def _market_regime():
+    """Detect current Nifty trend, daily volatility, and India VIX fear level."""
+    result = {"trend": "UNKNOWN", "volatility": "UNKNOWN", "vix": None, "fear": "UNKNOWN", "nifty": None}
+    try:
+        df = yf.Ticker("^NSEI").history(period="60d", interval="1d", auto_adjust=True)
+        if df is not None and len(df) >= 20:
+            close = df["Close"]
+            curr  = float(close.iloc[-1])
+            sma20 = float(close.rolling(20).mean().iloc[-1])
+            result["nifty"] = curr
+            result["trend"] = "BULLISH" if curr > sma20 else "BEARISH"
+            daily_vol = float(close.pct_change().dropna().tail(10).std() * 100)
+            if daily_vol < 0.7:   result["volatility"] = "LOW"
+            elif daily_vol < 1.2: result["volatility"] = "NORMAL"
+            else:                 result["volatility"] = "HIGH"
+    except Exception:
+        pass
+    try:
+        vdf = yf.Ticker("^INDIAVIX").history(period="5d", interval="1d", auto_adjust=True)
+        if vdf is not None and not vdf.empty:
+            v = float(vdf["Close"].iloc[-1])
+            result["vix"]  = v
+            result["fear"] = "CALM" if v < 15 else ("NEUTRAL" if v < 20 else "FEARFUL")
+    except Exception:
+        pass
+    return result
+
+
+_STRATEGY_TYPE = {
+    "Trend Pullback":         "TREND",
+    "Volume Breakout":        "BREAKOUT",
+    "Oversold Reversal":      "REVERSAL",
+    "Bullish Setup":          "TREND",
+    "Golden Cross":           "MOMENTUM",
+    "Supertrend Reversal":    "REVERSAL",
+    "Opening Range Breakout": "BREAKOUT",
+    "VWAP Bounce":            "MEAN_REVERT",
+    "EMA Crossover":          "MOMENTUM",
+    "Supertrend Signal":      "TREND",
+}
+
+
+def _regime_fit(stype: str, trend: str, volatility: str, fear: str) -> int:
+    """Return 0-100 fit score for a strategy type in the current regime."""
+    s = 50
+    if stype == "TREND":
+        s += 25 if trend == "BULLISH" else -25
+        s += 10 if volatility == "LOW" else (-15 if volatility == "HIGH" else 0)
+    elif stype == "MOMENTUM":
+        s += 20 if trend == "BULLISH" else -20
+        s += -20 if volatility == "HIGH" else 0
+        s += -15 if fear == "FEARFUL" else 0
+    elif stype == "BREAKOUT":
+        s += 25 if volatility == "HIGH" else (-20 if volatility == "LOW" else 0)
+    elif stype == "REVERSAL":
+        s += 20 if trend == "BEARISH" else -10
+        s += 15 if fear == "FEARFUL" else 0
+        s += 10 if volatility in ("NORMAL", "HIGH") else 0
+    elif stype == "MEAN_REVERT":
+        s += 10 if volatility == "LOW" else (-10 if volatility == "HIGH" else 5)
+    return max(0, min(100, s))
+
+
 if _import_error:
     st.error("Import error — check logs.")
     st.code(_import_error, language="python")
@@ -154,7 +219,7 @@ if _run_scan:
         st.rerun()
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_live, tab_perf, tab_hist = st.tabs(["📍 Live Positions", "📊 Performance", "📜 History"])
+tab_live, tab_perf, tab_hist, tab_insights = st.tabs(["📍 Live Positions", "📊 Performance", "📜 History", "🧠 Insights"])
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 1 — LIVE POSITIONS                                                     ║
@@ -273,25 +338,26 @@ with tab_live:
                     else:
                         progress = 0
 
+                    days_held  = (_dt.date.today() - _dt.date.fromisoformat(sig["signal_date"])).days
+
                     # Status
                     if is_long:
-                        if curr_price <= stop:              status_l, status_c = "STOPPED",    "#ff4d6d"
-                        elif curr_price >= t2:              status_l, status_c = "T2 HIT",     "#00c896"
-                        elif curr_price >= t1:              status_l, status_c = "T1 HIT",     "#5AD8A6"
-                        elif (entry - curr_price) / abs(entry - stop) > 0.6:
-                                                            status_l, status_c = "NEAR SL",    "#f0b429"
-                        else:                               status_l, status_c = "ACTIVE",     "#7c83fd"
+                        if curr_price <= stop:                                       status_l, status_c = "STOPPED",    "#ff4d6d"
+                        elif curr_price >= t2:                                       status_l, status_c = "T2 HIT",     "#00c896"
+                        elif curr_price >= t1:                                       status_l, status_c = "T1 HIT",     "#5AD8A6"
+                        elif (entry - curr_price) / abs(entry - stop) > 0.6:        status_l, status_c = "NEAR SL",    "#f0b429"
+                        elif days_held >= 3 and abs(pnl_pct) < 0.4:                 status_l, status_c = "STALE",      "#64748b"
+                        else:                                                        status_l, status_c = "ACTIVE",     "#7c83fd"
                     else:
-                        if curr_price >= stop:              status_l, status_c = "STOPPED",    "#ff4d6d"
-                        elif curr_price <= t2:              status_l, status_c = "T2 HIT",     "#00c896"
-                        elif curr_price <= t1:              status_l, status_c = "T1 HIT",     "#5AD8A6"
-                        elif (curr_price - entry) / abs(stop - entry) > 0.6:
-                                                            status_l, status_c = "NEAR SL",    "#f0b429"
-                        else:                               status_l, status_c = "ACTIVE",     "#7c83fd"
+                        if curr_price >= stop:                                       status_l, status_c = "STOPPED",    "#ff4d6d"
+                        elif curr_price <= t2:                                       status_l, status_c = "T2 HIT",     "#00c896"
+                        elif curr_price <= t1:                                       status_l, status_c = "T1 HIT",     "#5AD8A6"
+                        elif (curr_price - entry) / abs(stop - entry) > 0.6:        status_l, status_c = "NEAR SL",    "#f0b429"
+                        elif days_held >= 3 and abs(pnl_pct) < 0.4:                 status_l, status_c = "STALE",      "#64748b"
+                        else:                                                        status_l, status_c = "ACTIVE",     "#7c83fd"
 
                     bar_fill_w = max(0, min(100, progress))
                     bar_color  = "#00c896" if progress >= 50 else "#f0b429" if progress >= 0 else "#ff4d6d"
-                    days_held  = (_dt.date.today() - _dt.date.fromisoformat(sig["signal_date"])).days
                     days_str   = f"{days_held}d" if days_held > 0 else "today"
 
                     html = (
@@ -633,3 +699,251 @@ with tab_hist:
 
 *Position size: ₹{int(position_size):,} · figures scale linearly*
 """)
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TAB 4 — INSIGHTS                                                           ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+with tab_insights:
+
+    regime = _market_regime()
+    trend      = regime["trend"]
+    volatility = regime["volatility"]
+    fear       = regime["fear"]
+    vix_val    = regime["vix"]
+
+    # ── Market Regime Banner ──────────────────────────────────────────────────
+    trend_col  = "#00c896" if trend == "BULLISH" else ("#ff4d6d" if trend == "BEARISH" else "#6b7a99")
+    vol_col    = "#f0b429" if volatility == "HIGH" else ("#00c896" if volatility == "LOW" else "#94a3b8")
+    fear_col   = "#ff4d6d" if fear == "FEARFUL" else ("#f0b429" if fear == "NEUTRAL" else "#00c896")
+
+    st.markdown(
+        '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Current Market Regime</div>',
+        unsafe_allow_html=True,
+    )
+    rc1, rc2, rc3 = st.columns(3)
+    for col, label, val, c in [
+        (rc1, "Nifty Trend",  trend,      trend_col),
+        (rc2, "Volatility",   volatility, vol_col),
+        (rc3, "Fear (VIX)",   f'{fear}{f"  {vix_val:.1f}" if vix_val else ""}', fear_col),
+    ]:
+        with col:
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba(255,255,255,0.07);border-top:3px solid {c};'
+                f'border-radius:14px;padding:14px 18px;margin-bottom:4px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">{label}</div>'
+                f'<div style="font-size:1.1rem;font-weight:800;color:{c};">{val}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
+
+    # ── Strategy-Regime Matcher ───────────────────────────────────────────────
+    st.markdown(
+        '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Strategy Suitability Right Now</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Build per-strategy win rates from signal log
+    _all_sigs   = log.get_signals(days_back=90)
+    _closed_90  = [s for s in _all_sigs if s["outcome"] not in (OUTCOME_OPEN, OUTCOME_EXPIRED)]
+    _strat_stats: dict = {}
+    for s in _closed_90:
+        st_ = s["strategy"]
+        if st_ not in _strat_stats:
+            _strat_stats[st_] = {"wins": 0, "total": 0}
+        _strat_stats[st_]["total"] += 1
+        if s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2):
+            _strat_stats[st_]["wins"] += 1
+
+    _matcher_rows = []
+    for strat, stype in _STRATEGY_TYPE.items():
+        fit   = _regime_fit(stype, trend, volatility, fear)
+        stats = _strat_stats.get(strat, {})
+        total = stats.get("total", 0)
+        wr    = round(stats["wins"] / total * 100) if total >= 3 else None
+        # Combined recommendation
+        if fit >= 70:
+            rec, rec_c = "IDEAL",  "#00c896"
+        elif fit >= 45:
+            rec, rec_c = "OK",     "#f0b429"
+        else:
+            rec, rec_c = "AVOID",  "#ff4d6d"
+        _matcher_rows.append({
+            "strat": strat, "stype": stype, "fit": fit,
+            "wr": wr, "total": total, "rec": rec, "rec_c": rec_c,
+        })
+
+    _matcher_rows.sort(key=lambda x: x["fit"], reverse=True)
+
+    for row in _matcher_rows:
+        bar_w   = row["fit"]
+        bar_col = "#00c896" if bar_w >= 70 else ("#f0b429" if bar_w >= 45 else "#ff4d6d")
+        wr_str  = f'{row["wr"]}% ({row["total"]} trades)' if row["wr"] is not None else f'No data ({row["total"]} trades)'
+        wr_col  = "#00c896" if (row["wr"] or 0) >= 50 else ("#f0b429" if (row["wr"] or 0) >= 35 else "#6b7a99")
+        st.markdown(
+            f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+            f'border:1px solid rgba(255,255,255,0.06);border-radius:12px;'
+            f'padding:12px 16px;margin-bottom:8px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+            f'<div>'
+            f'<span style="font-size:0.88rem;font-weight:700;color:#e2e8f0;">{row["strat"]}</span>'
+            f'<span style="font-size:0.65rem;color:#475569;margin-left:8px;">{row["stype"]}</span>'
+            f'</div>'
+            f'<div style="display:flex;gap:10px;align-items:center;">'
+            f'<span style="font-size:0.7rem;color:{wr_col};font-weight:600;">Win rate: {wr_str}</span>'
+            f'<span style="background:{row["rec_c"]}22;color:{row["rec_c"]};'
+            f'border:1px solid {row["rec_c"]}44;border-radius:5px;'
+            f'padding:2px 10px;font-size:0.7rem;font-weight:700;">{row["rec"]}</span>'
+            f'</div>'
+            f'</div>'
+            f'<div style="background:rgba(255,255,255,0.05);border-radius:4px;height:4px;">'
+            f'<div style="width:{bar_w}%;height:100%;background:{bar_col};border-radius:4px;"></div>'
+            f'</div>'
+            f'<div style="font-size:0.62rem;color:#374151;margin-top:4px;">Regime fit: {bar_w}/100</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
+
+    # ── Personal Bias Analysis ────────────────────────────────────────────────
+    st.markdown(
+        '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Your Trading Patterns</div>',
+        unsafe_allow_html=True,
+    )
+
+    _all_90  = log.get_signals(days_back=90)
+    _closed  = [s for s in _all_90 if s["outcome"] not in (OUTCOME_OPEN, OUTCOME_EXPIRED)]
+
+    if len(_all_90) < 5:
+        st.markdown(
+            '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);'
+            'border-radius:12px;padding:24px;text-align:center;color:#475569;font-size:0.85rem;">'
+            'Not enough signals yet (need 5+) — run more scans to unlock bias analysis.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        # LONG vs SHORT
+        _long_all   = [s for s in _all_90 if s["direction"] == "LONG"]
+        _short_all  = [s for s in _all_90 if s["direction"] == "SHORT"]
+        _long_wins  = sum(1 for s in _closed if s["direction"] == "LONG"  and s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2))
+        _short_wins = sum(1 for s in _closed if s["direction"] == "SHORT" and s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2))
+        _long_cl    = sum(1 for s in _closed if s["direction"] == "LONG")
+        _short_cl   = sum(1 for s in _closed if s["direction"] == "SHORT")
+        _lwr = round(_long_wins  / _long_cl  * 100) if _long_cl  > 0 else None
+        _swr = round(_short_wins / _short_cl * 100) if _short_cl > 0 else None
+
+        # Hold time
+        _hold_days = []
+        for s in _closed:
+            try:
+                _ed = _dt.date.fromisoformat(s["signal_date"])
+                _xd = _dt.date.fromisoformat(s["outcome_at"][:10])
+                _hold_days.append((_xd - _ed).days)
+            except Exception:
+                pass
+        _avg_hold = round(sum(_hold_days) / len(_hold_days), 1) if _hold_days else None
+
+        # Sector concentration
+        _sec_cnt: dict = {}
+        for s in _all_90:
+            sec = s.get("sector") or "Unknown"
+            _sec_cnt[sec] = _sec_cnt.get(sec, 0) + 1
+        _top_sec = sorted(_sec_cnt.items(), key=lambda x: x[1], reverse=True)[:3]
+
+        # Best/worst strategy (min 3 closed trades)
+        _st_wr = {}
+        for s in _closed:
+            st_ = s["strategy"]
+            if st_ not in _st_wr:
+                _st_wr[st_] = {"w": 0, "n": 0}
+            _st_wr[st_]["n"] += 1
+            if s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2):
+                _st_wr[st_]["w"] += 1
+        _st_ranked = sorted(
+            [(k, round(v["w"] / v["n"] * 100), v["n"]) for k, v in _st_wr.items() if v["n"] >= 3],
+            key=lambda x: x[1], reverse=True,
+        )
+        _best_strat = _st_ranked[0]  if _st_ranked else None
+        _worst_strat = _st_ranked[-1] if len(_st_ranked) > 1 else None
+
+        # Render bias cards
+        bc1, bc2, bc3 = st.columns(3)
+
+        with bc1:
+            _bias_arrow = "↑" if len(_long_all) > len(_short_all) * 1.5 else ("↓" if len(_short_all) > len(_long_all) * 1.5 else "↕")
+            _bias_label = "LONG-BIASED" if len(_long_all) > len(_short_all) else ("SHORT-BIASED" if len(_short_all) > len(_long_all) else "BALANCED")
+            _bias_col   = "#f0b429" if _bias_label != "BALANCED" else "#00c896"
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Direction Bias</div>'
+                f'<div style="font-size:1rem;font-weight:800;color:{_bias_col};margin-bottom:8px;">'
+                f'{_bias_arrow} {_bias_label}</div>'
+                f'<div style="font-size:0.75rem;color:#475569;line-height:1.7;">'
+                f'LONG: {len(_long_all)} signals'
+                f'{f" · {_lwr}% WR" if _lwr is not None else ""}<br>'
+                f'SHORT: {len(_short_all)} signals'
+                f'{f" · {_swr}% WR" if _swr is not None else ""}'
+                f'</div>'
+                + (f'<div style="margin-top:8px;font-size:0.72rem;color:#f0b429;">'
+                   f'⚠ Your SHORT win rate is higher — consider more short setups.</div>'
+                   if (_lwr is not None and _swr is not None and _swr > _lwr + 15) else '')
+                + f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        with bc2:
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Best Strategy</div>'
+                + (f'<div style="font-size:0.9rem;font-weight:700;color:#00c896;margin-bottom:4px;">'
+                   f'{_best_strat[0]}</div>'
+                   f'<div style="font-size:0.78rem;color:#475569;">{_best_strat[1]}% win rate · {_best_strat[2]} trades</div>'
+                   if _best_strat else
+                   f'<div style="color:#374151;font-size:0.8rem;">Need 3+ closed trades per strategy.</div>')
+                + (f'<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;">'
+                   f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                   f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Weakest</div>'
+                   f'<div style="font-size:0.82rem;color:#ff4d6d;font-weight:600;">{_worst_strat[0]}</div>'
+                   f'<div style="font-size:0.72rem;color:#475569;">{_worst_strat[1]}% WR · {_worst_strat[2]} trades</div>'
+                   f'</div>'
+                   if _worst_strat else '')
+                + f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        with bc3:
+            _sec_html = "".join(
+                f'<div style="display:flex;justify-content:space-between;'
+                f'font-size:0.75rem;padding:3px 0;">'
+                f'<span style="color:#94a3b8;">{sec}</span>'
+                f'<span style="color:#475569;">{cnt}</span></div>'
+                for sec, cnt in _top_sec
+            )
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 18px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Top Sectors Traded</div>'
+                + _sec_html
+                + (f'<div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;">'
+                   f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                   f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Avg Hold Time</div>'
+                   f'<div style="font-size:1rem;font-weight:700;color:#94a3b8;">'
+                   f'{_avg_hold}d</div>'
+                   f'</div>'
+                   if _avg_hold is not None else '')
+                + f'</div>',
+                unsafe_allow_html=True,
+            )
