@@ -276,7 +276,6 @@ with t_home:
 
     # ── MARKET PULSE ───────────────────────────────────────────────────────────
     indices = _hero_indices()
-    qs      = _quick_stats()
 
     def _vix_sentiment(v):
         if v < 12:  return "VERY CALM", "#00c896", "0,200,150"
@@ -360,34 +359,6 @@ with t_home:
             )
 
     st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
-
-    # ── YOUR SIGNALS ───────────────────────────────────────────────────────────
-    st.markdown(
-        '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
-        'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Your Signals</div>',
-        unsafe_allow_html=True,
-    )
-    _sig_items = [
-        ("Today's Signals", str(qs["today"]),       "new ideas",        "#f0b429", "240,180,41"),
-        ("Open Positions",  str(qs["open"]),         "being tracked",    "#7c83fd", "124,131,253"),
-        ("Win Rate (30d)",  f'{qs["wr"]}%',          "of closed trades", "#00c896", "0,200,150"),
-        ("Total Signals",   str(qs["total"]),        "last 30 days",     "#06b6d4", "6,182,212"),
-    ]
-    sig_cols = st.columns(4)
-    for col, (label, val, sub, c, rgb) in zip(sig_cols, _sig_items):
-        with col:
-            st.markdown(
-                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
-                f'border:1px solid rgba({rgb},0.12);border-radius:14px;padding:16px 18px;">'
-                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
-                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">{label}</div>'
-                f'<div style="font-size:1.8rem;font-weight:800;color:{c};letter-spacing:-0.03em;">{val}</div>'
-                f'<div style="font-size:0.67rem;color:#374151;margin-top:4px;">{sub}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-    st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
 
     # ── TODAY'S SIGNALS FEED ───────────────────────────────────────────────────
     today_sigs = _today_signals()
@@ -492,6 +463,28 @@ with t_home:
 # ║  TAB 2 — SIGNALS                                                            ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_signals:
+    # ── SIGNAL STATS ───────────────────────────────────────────────────────────
+    _qs = _quick_stats()
+    _sig_items = [
+        ("Today's Signals", str(_qs["today"]),       "new ideas",        "#f0b429", "240,180,41"),
+        ("Open Positions",  str(_qs["open"]),         "being tracked",    "#7c83fd", "124,131,253"),
+        ("Win Rate (30d)",  f'{_qs["wr"]}%',          "of closed trades", "#00c896", "0,200,150"),
+        ("Total (30d)",     str(_qs["total"]),        "all signals",      "#06b6d4", "6,182,212"),
+    ]
+    _sc2 = st.columns(4)
+    for _col2, (_lbl, _val, _sub, _c, _rgb) in zip(_sc2, _sig_items):
+        with _col2:
+            st.markdown(
+                f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+                f'border:1px solid rgba({_rgb},0.12);border-radius:14px;padding:16px 18px;margin-bottom:16px;">'
+                f'<div style="font-size:0.6rem;color:#6b7a99;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">{_lbl}</div>'
+                f'<div style="font-size:1.8rem;font-weight:800;color:{_c};letter-spacing:-0.03em;">{_val}</div>'
+                f'<div style="font-size:0.67rem;color:#374151;margin-top:4px;">{_sub}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
     st.markdown(
         '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
         'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;">Trade Signal Tools</div>',

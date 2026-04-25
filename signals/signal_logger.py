@@ -510,13 +510,22 @@ class SignalLogger:
             )
             strat_rows = cur.fetchall()
 
-        won         = by_outcome.get(OUTCOME_TARGET1, 0) + by_outcome.get(OUTCOME_TARGET2, 0)
-        lost        = by_outcome.get(OUTCOME_STOPPED, 0)
+        # Count profitable SQUARED_OFF trades (intraday EOD close with positive P&L) as wins
+        with self._db_conn() as conn:
+            cur = self._exec(
+                conn,
+                f"SELECT COUNT(*) AS cnt FROM signal_log WHERE {where} AND outcome=? AND pnl_r > 0",
+                params + [OUTCOME_SQUARED_OFF],
+            )
+            sq_profitable = (cur.fetchone() or {}).get("cnt", 0) or 0
+
+        won         = by_outcome.get(OUTCOME_TARGET1, 0) + by_outcome.get(OUTCOME_TARGET2, 0) + sq_profitable
+        lost        = by_outcome.get(OUTCOME_STOPPED, 0) + (by_outcome.get(OUTCOME_SQUARED_OFF, 0) - sq_profitable)
         squared_off = by_outcome.get(OUTCOME_SQUARED_OFF, 0)
         open_cnt    = by_outcome.get(OUTCOME_OPEN, 0)
         expired     = by_outcome.get(OUTCOME_EXPIRED, 0)
         total       = sum(by_outcome.values())
-        closed      = won + lost + squared_off
+        closed      = by_outcome.get(OUTCOME_TARGET1, 0) + by_outcome.get(OUTCOME_TARGET2, 0) + by_outcome.get(OUTCOME_STOPPED, 0) + squared_off
         win_rate    = round(won / closed * 100, 1) if closed > 0 else 0.0
 
         by_strategy = {}
