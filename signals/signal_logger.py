@@ -262,23 +262,20 @@ class SignalLogger:
             except Exception:
                 pass
 
-        # One-time dedup migration: clean existing duplicate (ticker, strategy, timeframe,
-        # signal_date) rows and add a unique index so they can never recur.
-        # Sentinel: skip if the index already exists.
+        # Dedup migration — runs every startup, fully idempotent.
+        # Step 1: try to create the unique index directly (no-op if it exists).
+        # Step 2: if that fails because duplicates exist, delete them first, then retry.
+        # Using separate connections so a failed CREATE INDEX doesn't abort the DELETE.
         try:
             with self._db_conn() as conn:
-                if _USE_PG:
-                    cur = self._exec(conn, """
-                        SELECT 1 FROM pg_indexes
-                        WHERE tablename='signal_log' AND indexname='idx_sl_uniq_signal'
-                    """)
-                else:
-                    cur = self._exec(conn, """
-                        SELECT 1 FROM sqlite_master
-                        WHERE type='index' AND name='idx_sl_uniq_signal'
-                    """)
-                if cur.fetchone() is None:
-                    # Delete all but the latest row per (ticker, strategy, timeframe, signal_date)
+                self._exec(conn, """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_sl_uniq_signal
+                    ON signal_log (ticker, strategy, timeframe, signal_date)
+                """)
+        except Exception:
+            # Duplicates exist — delete all but the highest-id row per combo, then create index.
+            try:
+                with self._db_conn() as conn:
                     self._exec(conn, """
                         DELETE FROM signal_log
                         WHERE id NOT IN (
@@ -286,13 +283,15 @@ class SignalLogger:
                             GROUP BY ticker, strategy, timeframe, signal_date
                         )
                     """)
+                    logger.info("Dedup migration: removed duplicate signals.")
+                with self._db_conn() as conn:
                     self._exec(conn, """
-                        CREATE UNIQUE INDEX idx_sl_uniq_signal
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_sl_uniq_signal
                         ON signal_log (ticker, strategy, timeframe, signal_date)
                     """)
-                    logger.info("Dedup migration: removed duplicate signals and added unique index.")
-        except Exception as exc:
-            logger.warning(f"Dedup migration failed (non-fatal): {exc}")
+                    logger.info("Dedup migration: unique index created.")
+            except Exception as exc2:
+                logger.warning(f"Dedup migration failed (non-fatal): {exc2}")
 
     # ── Write ──────────────────────────────────────────────────────────────────
 
