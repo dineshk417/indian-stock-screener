@@ -491,8 +491,8 @@ class SignalLogger:
                 f"""
                 SELECT strategy,
                        COUNT(*) AS total,
-                       SUM(CASE WHEN outcome IN (?,?) THEN 1 ELSE 0 END) AS wins,
-                       SUM(CASE WHEN outcome=? THEN 1 ELSE 0 END)        AS losses,
+                       SUM(CASE WHEN outcome IN (?,?) OR (outcome=? AND pnl_r>0) THEN 1 ELSE 0 END) AS wins,
+                       SUM(CASE WHEN outcome=? OR (outcome=? AND pnl_r<=0) THEN 1 ELSE 0 END)       AS losses,
                        AVG(CASE WHEN outcome NOT IN (?,?) THEN pnl_r END)        AS avg_r,
                        SUM(CASE WHEN outcome NOT IN (?,?) THEN net_pnl_inr END)  AS net_pnl,
                        AVG(CASE WHEN outcome NOT IN (?,?) THEN net_pnl_inr END)  AS avg_net_pnl
@@ -501,8 +501,8 @@ class SignalLogger:
                 GROUP BY strategy
                 """,
                 [
-                    OUTCOME_TARGET1, OUTCOME_TARGET2,
-                    OUTCOME_STOPPED,
+                    OUTCOME_TARGET1, OUTCOME_TARGET2, OUTCOME_SQUARED_OFF,
+                    OUTCOME_STOPPED, OUTCOME_SQUARED_OFF,
                     OUTCOME_OPEN, OUTCOME_EXPIRED,
                     OUTCOME_OPEN, OUTCOME_EXPIRED,
                     OUTCOME_OPEN, OUTCOME_EXPIRED,
@@ -510,8 +510,6 @@ class SignalLogger:
             )
             strat_rows = cur.fetchall()
 
-        # Count profitable SQUARED_OFF trades (intraday EOD close with positive P&L) as wins
-        with self._db_conn() as conn:
             cur = self._exec(
                 conn,
                 f"SELECT COUNT(*) AS cnt FROM signal_log WHERE {where} AND outcome=? AND pnl_r > 0",
@@ -543,12 +541,19 @@ class SignalLogger:
                 "avg_net_pnl": round(r["avg_net_pnl"], 2) if r["avg_net_pnl"] is not None else None,
             }
 
+        target_wins = by_outcome.get(OUTCOME_TARGET1, 0) + by_outcome.get(OUTCOME_TARGET2, 0)
+        sq_losing   = squared_off - sq_profitable
+
         return {
             "total":             total,
             "open":              open_cnt,
             "won":               won,
             "lost":              lost,
+            "target_wins":       target_wins,
+            "sq_profitable":     sq_profitable,
+            "sq_losing":         sq_losing,
             "squared_off":       squared_off,
+            "stops":             by_outcome.get(OUTCOME_STOPPED, 0),
             "expired":           expired,
             "win_rate":          win_rate,
             "avg_r":             round(avg_r_row["avg_r"], 3)        if avg_r_row and avg_r_row["avg_r"]       is not None else None,

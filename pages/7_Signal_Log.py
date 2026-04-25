@@ -326,35 +326,47 @@ with tab_live:
                     _exit_fmt = "Active"
 
                 if curr_price is not None:
-                    pnl_pct = ((curr_price - entry) / entry * 100) if is_long else ((entry - curr_price) / entry * 100)
+                    days_held = (_dt.date.today() - _dt.date.fromisoformat(sig["signal_date"])).days
+
+                    # Determine status first (based on current price vs levels)
+                    if is_long:
+                        if curr_price <= stop:                                  status_l, status_c = "STOPPED",    "#ff4d6d"
+                        elif curr_price >= t2:                                  status_l, status_c = "T2 HIT",     "#00c896"
+                        elif curr_price >= t1:                                  status_l, status_c = "T1 HIT",     "#5AD8A6"
+                        elif (entry - curr_price) / abs(entry - stop) > 0.6:   status_l, status_c = "NEAR SL",    "#f0b429"
+                        elif days_held >= 3 and abs((curr_price - entry) / entry * 100) < 0.4:
+                                                                                status_l, status_c = "STALE",      "#64748b"
+                        else:                                                   status_l, status_c = "ACTIVE",     "#7c83fd"
+                    else:
+                        if curr_price >= stop:                                  status_l, status_c = "STOPPED",    "#ff4d6d"
+                        elif curr_price <= t2:                                  status_l, status_c = "T2 HIT",     "#00c896"
+                        elif curr_price <= t1:                                  status_l, status_c = "T1 HIT",     "#5AD8A6"
+                        elif (curr_price - entry) / abs(stop - entry) > 0.6:   status_l, status_c = "NEAR SL",    "#f0b429"
+                        elif days_held >= 3 and abs((entry - curr_price) / entry * 100) < 0.4:
+                                                                                status_l, status_c = "STALE",      "#64748b"
+                        else:                                                   status_l, status_c = "ACTIVE",     "#7c83fd"
+
+                    # P&L shown at trigger price when a level is hit — not at current drifted price
+                    if status_l == "STOPPED":
+                        display_price = stop
+                    elif status_l == "T1 HIT":
+                        display_price = t1
+                    elif status_l == "T2 HIT":
+                        display_price = t2
+                    else:
+                        display_price = curr_price
+
+                    pnl_pct = ((display_price - entry) / entry * 100) if is_long else ((entry - display_price) / entry * 100)
                     pnl_inr = pnl_pct / 100 * float(position_size)
                     pnl_col = "#00c896" if pnl_pct >= 0 else "#ff4d6d"
 
-                    # Progress bar: entry=0%, T2=100%, stop = negative
+                    # Progress bar: entry=0%, T2=100%, SL=negative
                     total_range = t2 - entry if is_long else entry - t2
                     if total_range > 0:
                         progress = ((curr_price - entry) / total_range * 100) if is_long else ((entry - curr_price) / total_range * 100)
                         progress = max(-50, min(110, progress))
                     else:
                         progress = 0
-
-                    days_held  = (_dt.date.today() - _dt.date.fromisoformat(sig["signal_date"])).days
-
-                    # Status
-                    if is_long:
-                        if curr_price <= stop:                                       status_l, status_c = "STOPPED",    "#ff4d6d"
-                        elif curr_price >= t2:                                       status_l, status_c = "T2 HIT",     "#00c896"
-                        elif curr_price >= t1:                                       status_l, status_c = "T1 HIT",     "#5AD8A6"
-                        elif (entry - curr_price) / abs(entry - stop) > 0.6:        status_l, status_c = "NEAR SL",    "#f0b429"
-                        elif days_held >= 3 and abs(pnl_pct) < 0.4:                 status_l, status_c = "STALE",      "#64748b"
-                        else:                                                        status_l, status_c = "ACTIVE",     "#7c83fd"
-                    else:
-                        if curr_price >= stop:                                       status_l, status_c = "STOPPED",    "#ff4d6d"
-                        elif curr_price <= t2:                                       status_l, status_c = "T2 HIT",     "#00c896"
-                        elif curr_price <= t1:                                       status_l, status_c = "T1 HIT",     "#5AD8A6"
-                        elif (curr_price - entry) / abs(stop - entry) > 0.6:        status_l, status_c = "NEAR SL",    "#f0b429"
-                        elif days_held >= 3 and abs(pnl_pct) < 0.4:                 status_l, status_c = "STALE",      "#64748b"
-                        else:                                                        status_l, status_c = "ACTIVE",     "#7c83fd"
 
                     bar_fill_w = max(0, min(100, progress))
                     bar_color  = "#00c896" if progress >= 50 else "#f0b429" if progress >= 0 else "#ff4d6d"
@@ -395,8 +407,8 @@ with tab_live:
                         f'<div style="font-size:0.95rem;font-weight:700;color:#e2e8f0;">₹{entry:,.2f}</div></div>'
 
                         f'<div style="text-align:center;">'
-                        f'<div style="font-size:0.58rem;color:#6b7a99;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Current</div>'
-                        f'<div style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">₹{curr_price:,.2f}</div>'
+                        f'<div style="font-size:0.58rem;color:#6b7a99;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">{"At "+status_l if status_l in ("T1 HIT","T2 HIT","STOPPED") else "Current"}</div>'
+                        f'<div style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">₹{display_price:,.2f}</div>'
                         f'<div style="font-size:0.78rem;font-weight:700;color:{pnl_col};">{pnl_pct:+.2f}% · ₹{pnl_inr:+,.0f}</div></div>'
 
                         f'<div style="text-align:center;">'
@@ -463,18 +475,29 @@ with tab_live:
 # ║  TAB 2 — PERFORMANCE                                                        ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_perf:
-    total_closed = perf["won"] + perf["lost"] + perf["squared_off"]
+    _target_wins = perf.get("target_wins", perf["won"])
+    _sq_prof     = perf.get("sq_profitable", 0)
+    _sq_lose     = perf.get("sq_losing", 0)
+    _stops       = perf.get("stops", perf["lost"])
+    total_closed = perf["won"] + perf["lost"]
     net_pnl      = perf.get("total_net_pnl_inr")
     avg_r        = perf.get("avg_r")
 
     # ── KPIs ──────────────────────────────────────────────────────────────────
-    wr_col   = "#00c896" if total_closed > 0 and perf["win_rate"] >= 50 else "#ff4d6d" if total_closed > 0 else "#475569"
-    pnl_col  = "#00c896" if (net_pnl or 0) >= 0 else "#ff4d6d"
-    r_col    = "#00c896" if (avg_r or 0) >= 0 else "#ff4d6d"
+    wr_col  = "#00c896" if total_closed > 0 and perf["win_rate"] >= 50 else "#ff4d6d" if total_closed > 0 else "#475569"
+    pnl_col = "#00c896" if (net_pnl or 0) >= 0 else "#ff4d6d"
+    r_col   = "#00c896" if (avg_r or 0) >= 0 else "#ff4d6d"
 
-    pf_won   = perf["won"]
-    pf_lost  = perf["lost"]
-    prof_fac = round(pf_won / pf_lost, 2) if pf_lost > 0 else None
+    # Win breakdown sub-label: "12W (8T+4SQ) · 9L (7Stop+2SQ)"
+    _w_parts = []
+    if _target_wins: _w_parts.append(f"{_target_wins}T")
+    if _sq_prof:     _w_parts.append(f"{_sq_prof}SQ")
+    _l_parts = []
+    if _stops:   _l_parts.append(f"{_stops}Stop")
+    if _sq_lose: _l_parts.append(f"{_sq_lose}SQ")
+    _wl_sub = f'{perf["won"]}W ({"+".join(_w_parts) or "—"}) · {perf["lost"]}L ({"+".join(_l_parts) or "—"})' if total_closed else "No closed trades yet"
+
+    avg_pnl = perf.get("avg_net_pnl_inr")
 
     kpi_html = (
         f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">'
@@ -482,23 +505,23 @@ with tab_perf:
         f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">'
         f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Win Rate</div>'
         f'<div style="color:{wr_col};font-size:1.6rem;font-weight:800;">{perf["win_rate"]}%</div>'
-        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{pf_won}W · {pf_lost}L · {perf["squared_off"]}SQ</div>'
+        f'<div style="color:#475569;font-size:0.68rem;margin-top:3px;line-height:1.5;">{_wl_sub}</div>'
         f'</div>'
 
         f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">'
         f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Net P&L</div>'
         f'<div style="color:{pnl_col};font-size:1.6rem;font-weight:800;">{"₹{:+,.0f}".format(net_pnl) if net_pnl is not None else "—"}</div>'
-        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">After costs · ₹{int(position_size):,}/trade</div>'
+        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">After costs · {"₹{:+,.0f}/trade avg".format(avg_pnl) if avg_pnl is not None else "₹{:,}/trade size".format(int(position_size))}</div>'
         f'</div>'
 
         f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">'
-        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Avg R-Multiple</div>'
+        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Expectancy (Avg R)</div>'
         f'<div style="color:{r_col};font-size:1.6rem;font-weight:800;">{f"{avg_r:+.2f}R" if avg_r is not None else "—"}</div>'
-        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">Risk-adjusted return per trade</div>'
+        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{"Positive edge — system works" if (avg_r or 0) > 0 else ("Negative expectancy — review setups" if (avg_r or 0) < 0 else "Break-even")}</div>'
         f'</div>'
 
         f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">'
-        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Trades</div>'
+        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Signals</div>'
         f'<div style="color:#f1f5f9;font-size:1.6rem;font-weight:800;">{perf["total"]}</div>'
         f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{perf["open"]} open · {total_closed} closed · {perf.get("expired",0)} expired</div>'
         f'</div>'
@@ -578,9 +601,11 @@ with tab_perf:
                 for s in _closed_dated:
                     val = s.get("net_pnl_inr")
                     if val is None:
-                        r   = s.get("pnl_r") or 0.0
-                        sl  = (s.get("sl_pct") or 2.0) / 100
-                        val = r * sl * float(position_size)
+                        r    = s.get("pnl_r") or 0.0
+                        # Use actual SL distance as risk, not a hardcoded pct
+                        risk_pct = (abs(s["entry_price"] - s["stop_loss"]) / s["entry_price"]
+                                    if s.get("entry_price") and s.get("stop_loss") else 0.02)
+                        val  = r * risk_pct * float(position_size)
                     running += val
                     dates.append(s["outcome_at"][:10])
                     cum.append(running)
@@ -608,20 +633,30 @@ with tab_perf:
         # ── Strategy breakdown ────────────────────────────────────────────────
         by_strat = perf.get("by_strategy", {})
         if by_strat:
-            st.markdown('<div style="font-size:0.78rem;font-weight:700;color:#94a3b8;margin:16px 0 8px;">By Strategy</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:0.78rem;font-weight:700;color:#94a3b8;margin:16px 0 4px;">By Strategy</div>'
+                '<div style="font-size:0.68rem;color:#475569;margin-bottom:8px;">'
+                'Wins = Target hits + profitable squared-off exits &nbsp;·&nbsp; Losses = Stopped out + unprofitable squared-off exits'
+                '</div>',
+                unsafe_allow_html=True,
+            )
             s_rows = []
             for sname, s in by_strat.items():
                 s_closed = s["wins"] + s["losses"]
                 s_rows.append({
-                    "Strategy":  sname,
-                    "Trades":    s["total"],
-                    "Won":       s["wins"],
-                    "Stopped":   s["losses"],
-                    "Win Rate":  f"{s['win_rate']}%" if s_closed > 0 else "—",
-                    "Avg R":     f"{s['avg_r']:+.2f}R" if s.get("avg_r") is not None else "—",
-                    "Net P&L":   f"₹{s['net_pnl_inr']:+,.0f}" if s.get("net_pnl_inr") is not None else "—",
+                    "Strategy":   sname,
+                    "Total":      s["total"],
+                    "Wins":       s["wins"],
+                    "Losses":     s["losses"],
+                    "Open":       s["total"] - s_closed,
+                    "Win Rate":   f"{s['win_rate']}%" if s_closed >= 3 else ("—" if s_closed < 3 else f"{s['win_rate']}%*"),
+                    "Avg R":      f"{s['avg_r']:+.2f}R" if s.get("avg_r") is not None else "—",
+                    "Net P&L ₹":  f"₹{s['net_pnl_inr']:+,.0f}" if s.get("net_pnl_inr") is not None else "—",
                 })
-            st.dataframe(pd.DataFrame(s_rows).set_index("Strategy"), use_container_width=True)
+            _df_s = pd.DataFrame(s_rows).set_index("Strategy")
+            st.dataframe(_df_s, use_container_width=True)
+            if any(s["wins"] + s["losses"] < 3 for s in by_strat.values()):
+                st.caption("Win Rate shows — for strategies with fewer than 3 closed trades (too small a sample).")
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -633,8 +668,10 @@ with tab_hist:
     else:
         # Build table (all signals, open + closed)
         rows = []
-        for s in sorted(signals, key=lambda x: x["signal_date"], reverse=True):
-            badge_l, badge_c = OUTCOME_BADGE.get(s["outcome"], (s["outcome"], "#6b7a99"))
+        for s in sorted(signals, key=lambda x: (x["signal_date"], x.get("logged_at", "")), reverse=True):
+            _outcome_lbl = OUTCOME_LABELS.get(s["outcome"], s["outcome"])
+            _risk_pct    = (abs(s["entry_price"] - s["stop_loss"]) / s["entry_price"] * 100
+                            if s.get("entry_price") and s.get("stop_loss") else None)
             rows.append({
                 "Date":      s["signal_date"],
                 "Ticker":    s["ticker"].replace(".NS", ""),
@@ -642,14 +679,14 @@ with tab_hist:
                 "Dir":       s["direction"],
                 "Strategy":  s["strategy"],
                 "Entry ₹":   round(s["entry_price"], 2),
-                "Exit ₹":    round(s.get("outcome_price") or 0, 2) or None,
                 "SL ₹":      round(s["stop_loss"], 2),
+                "SL %":      round(_risk_pct, 1) if _risk_pct else None,
                 "T1 ₹":      round(s["target_1"], 2),
                 "T2 ₹":      round(s["target_2"], 2),
-                "Outcome":   s["outcome"],
+                "Exit ₹":    round(s["outcome_price"], 2) if s.get("outcome_price") else None,
+                "Outcome":   _outcome_lbl,
                 "R":         round(s["pnl_r"], 2) if s.get("pnl_r") is not None else None,
                 "Net P&L ₹": round(s["net_pnl_inr"], 2) if s.get("net_pnl_inr") is not None else None,
-                "Conf":      s.get("confidence") or 1,
                 "Exit Time": (s.get("outcome_at") or "")[:16],
             })
 
@@ -668,13 +705,13 @@ with tab_hist:
             .map(_pnl_style, subset=["R", "Net P&L ₹"])
             .format({
                 "Entry ₹":   lambda v: f"₹{v:,.2f}" if v else "",
-                "Exit ₹":    lambda v: f"₹{v:,.2f}" if v else "—",
                 "SL ₹":      lambda v: f"₹{v:,.2f}" if v else "",
+                "SL %":      lambda v: f"{v:.1f}%" if v is not None else "—",
                 "T1 ₹":      lambda v: f"₹{v:,.2f}" if v else "",
                 "T2 ₹":      lambda v: f"₹{v:,.2f}" if v else "",
+                "Exit ₹":    lambda v: f"₹{v:,.2f}" if v is not None else "—",
                 "R":         lambda v: f"{v:+.2f}R" if v is not None else "—",
                 "Net P&L ₹": lambda v: f"₹{v:+,.0f}" if v is not None else "—",
-                "Conf":      lambda v: "★" * int(v),
             }, na_rep="—")
         )
         st.dataframe(styled, use_container_width=True, height=500, hide_index=True)
