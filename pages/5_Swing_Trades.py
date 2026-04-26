@@ -253,7 +253,7 @@ st.markdown(
 )
 
 # ── SIGNAL CARDS ───────────────────────────────────────────────────────────────
-for signal in filtered:
+for i, signal in enumerate(filtered):
     signal_card(signal.to_dict())
     strat_color = _STRATEGY_COLORS.get(signal.strategy, "#6b7a99")
     with st.expander(f"📊 {signal.ticker.replace('.NS','')} — Analysis & Chart", expanded=False):
@@ -282,8 +282,8 @@ for signal in filtered:
                     "target_2":  signal.target_2,
                 },
             )
-            st.plotly_chart(fig, width="stretch")
-            st.plotly_chart(rsi_macd_chart(df_ind), width="stretch")
+            st.plotly_chart(fig, use_container_width=True, key=f"candle_{i}_{signal.ticker}")
+            st.plotly_chart(rsi_macd_chart(df_ind), use_container_width=True, key=f"rsi_{i}_{signal.ticker}")
 
 st.divider()
 st.caption(

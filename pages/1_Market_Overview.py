@@ -326,7 +326,7 @@ def _market_data():
     with c1:
         st.subheader("Sector Heatmap")
         try:
-            st.plotly_chart(sector_heatmap(sector_data), width="stretch")
+            st.plotly_chart(sector_heatmap(sector_data), use_container_width=True, key="sector_heatmap")
         except Exception:
             pass
 
@@ -351,7 +351,7 @@ def _market_data():
             advances += (1 if chg > 0 else 0)
             declines += (1 if chg < 0 else 0)
         try:
-            st.plotly_chart(market_breadth_gauge(advances, declines), width="stretch")
+            st.plotly_chart(market_breadth_gauge(advances, declines), use_container_width=True, key="breadth_gauge")
         except Exception:
             pass
 

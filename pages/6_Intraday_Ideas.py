@@ -273,7 +273,7 @@ else:
         f'Live Signals — {len(signals)} found</div>',
         unsafe_allow_html=True,
     )
-    for signal in signals:
+    for i, signal in enumerate(signals):
         signal_card(signal.to_dict())
         with st.expander(f"📊 5-min Chart · {signal.ticker.replace('.NS', '')}", expanded=False):
             df = fetch_single_stock(
@@ -292,4 +292,4 @@ else:
                         "target_1":  signal.target_1,
                     },
                 )
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True, key=f"intra_candle_{i}_{signal.ticker}")

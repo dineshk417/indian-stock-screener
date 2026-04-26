@@ -296,8 +296,8 @@ if selected:
 
             c1, c2 = st.columns([3, 1])
             with c1:
-                st.plotly_chart(candlestick_chart(df_ind, selected, show_volume=True, show_sma=True), width="stretch")
-                st.plotly_chart(rsi_macd_chart(df_ind), width="stretch")
+                st.plotly_chart(candlestick_chart(df_ind, selected, show_volume=True, show_sma=True), use_container_width=True, key="tech_candle")
+                st.plotly_chart(rsi_macd_chart(df_ind), use_container_width=True, key="tech_rsi")
             with c2:
                 detail_items = [
                     ("RSI",        f'{summary.get("rsi", 0):.1f}',          "#f0b429"),

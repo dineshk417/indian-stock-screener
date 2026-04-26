@@ -291,4 +291,4 @@ if selected:
             plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=40, r=40, t=40, b=40),
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True, key="fund_chart")
