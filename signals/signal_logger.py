@@ -296,6 +296,27 @@ class SignalLogger:
     # ── Write ──────────────────────────────────────────────────────────────────
 
     def log_signal(self, signal: "TradeSignal") -> bool:
+        # One-trade-per-ticker rule: don't open a second position while one is OPEN
+        try:
+            with self._db_conn() as conn:
+                cur = self._exec(
+                    conn,
+                    "SELECT COUNT(*) as n FROM signal_log WHERE ticker=? AND outcome=?"
+                    if not _USE_PG else
+                    "SELECT COUNT(*) as n FROM signal_log WHERE ticker=%s AND outcome=%s",
+                    (signal.ticker, OUTCOME_OPEN),
+                )
+                row = cur.fetchone()
+                n   = (row["n"] if isinstance(row, dict) else row[0]) if row else 0
+                if n > 0:
+                    logger.debug(
+                        "Skipping %s (%s): already has an OPEN position",
+                        signal.ticker, signal.strategy,
+                    )
+                    return False
+        except Exception as _exc:
+            logger.warning("One-trade-per-ticker check failed (non-fatal): %s", _exc)
+
         now_ist   = datetime.now(IST)
         date_str  = now_ist.strftime("%Y-%m-%d")
         signal_id = _make_signal_id(signal, date_str)

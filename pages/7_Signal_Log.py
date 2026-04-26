@@ -524,6 +524,14 @@ with tab_perf:
 
     avg_pnl = perf.get("avg_net_pnl_inr")
 
+    # Portfolio return on ₹1L base capital
+    _BASE_CAPITAL    = 100_000  # ₹1,00,000 — fixed portfolio base
+    _portfolio_pnl   = net_pnl if net_pnl is not None else 0.0
+    _portfolio_ret   = _portfolio_pnl / _BASE_CAPITAL * 100
+    _port_col        = "#00c896" if _portfolio_pnl >= 0 else "#ff4d6d"
+    _port_val_str    = f"₹{_BASE_CAPITAL + _portfolio_pnl:,.0f}"
+    _port_ret_str    = f"{_portfolio_ret:+.1f}%"
+
     kpi_html = (
         f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;">'
 
@@ -545,10 +553,13 @@ with tab_perf:
         f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{"Positive edge — system works" if (avg_r or 0) > 0 else ("Negative expectancy — review setups" if (avg_r or 0) < 0 else "Break-even")}</div>'
         f'</div>'
 
-        f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">'
-        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Signals</div>'
-        f'<div style="color:#f1f5f9;font-size:1.6rem;font-weight:800;">{perf["total"]}</div>'
-        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">{perf["open"]} open · {total_closed} closed · {perf.get("expired",0)} expired</div>'
+        f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);border:1px solid rgba(255,255,255,0.06);'
+        f'border-top:2px solid {_port_col}44;border-radius:14px;padding:16px;">'
+        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:6px;">Portfolio</div>'
+        f'<div style="color:{_port_col};font-size:1.6rem;font-weight:800;">{_port_val_str}</div>'
+        f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">'
+        f'<span style="color:{_port_col};font-weight:700;">{_port_ret_str}</span>'
+        f' on ₹1,00,000 base · {perf["total"]} signals</div>'
         f'</div>'
 
         f'</div>'
