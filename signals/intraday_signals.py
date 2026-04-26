@@ -383,13 +383,18 @@ def generate_intraday_signals(
         from data.market_status import is_trading_day
         if is_trading_day():
             from signals.signal_logger import get_signal_logger
-            get_signal_logger().log_signals(signals)
-            # Telegram alerts
-            try:
-                from notifications.telegram import notify_intraday_signals
-                notify_intraday_signals(signals)
-            except Exception as te:
-                logger.warning(f"Telegram intraday alert failed: {te}")
+            _sl = get_signal_logger()
+            # Only collect signals that are genuinely NEW (not already in DB today)
+            new_signals = [s for s in signals if _sl.log_signal(s)]
+            if new_signals:
+                logger.info(f"Intraday signal log: {len(new_signals)} new signals persisted")
+                try:
+                    from notifications.telegram import notify_intraday_signals
+                    notify_intraday_signals(new_signals)   # Only alert for truly new signals
+                except Exception as te:
+                    logger.warning(f"Telegram intraday alert failed: {te}")
+            else:
+                logger.info("Intraday signal log: all signals already exist — no Telegram alert sent")
     except Exception as e:
         logger.warning(f"Signal logging failed (intraday): {e}")
 

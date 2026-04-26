@@ -178,16 +178,41 @@ def detect_patterns(df: pd.DataFrame) -> list[str]:
     latest = df.iloc[-1]
     prev = df.iloc[-2] if len(df) >= 2 else None
 
-    # Golden Cross / Death Cross — state-based: SMA50 position vs SMA200
-    sma50_col = f"SMA_{SMA_MID}"
+    # Golden Cross / Death Cross — event-based, not just current state.
+    # "Golden Cross" only fires if SMA50 crossed above SMA200 within the last
+    # 15 trading days. Older crossovers are stale — price may be far extended.
+    sma50_col  = f"SMA_{SMA_MID}"
     sma200_col = f"SMA_{SMA_LONG}"
+    _GC_LOOKBACK = 15   # trading days ≈ 3 calendar weeks
     if sma50_col in df.columns and sma200_col in df.columns:
         l50, l200 = _s(latest[sma50_col]), _s(latest[sma200_col])
         if l50 is not None and l200 is not None:
             if l50 > l200:
-                patterns.append("Golden Cross")
-            else:
-                patterns.append("Death Cross")
+                # Only tag as Golden Cross if the crossover happened recently.
+                # Look back _GC_LOOKBACK candles and check if SMA50 was <= SMA200
+                # at any point — that means the cross is fresh.
+                lookback_df = df.iloc[-(min(_GC_LOOKBACK + 1, len(df))):-1]
+                was_below = any(
+                    _s(row[sma50_col]) is not None
+                    and _s(row[sma200_col]) is not None
+                    and _s(row[sma50_col]) <= _s(row[sma200_col])
+                    for _, row in lookback_df.iterrows()
+                )
+                if was_below:
+                    patterns.append("Golden Cross")   # Fresh crossover — actionable
+                # If not was_below: SMA50 has been above SMA200 for >15 days.
+                # Still bullish (caught by "Above SMA200" below), just not a new signal.
+            elif _s(latest[sma200_col]) is not None and _s(latest[sma50_col]) is not None:
+                # Check for fresh Death Cross similarly
+                lookback_df = df.iloc[-(min(_GC_LOOKBACK + 1, len(df))):-1]
+                was_above = any(
+                    _s(row[sma50_col]) is not None
+                    and _s(row[sma200_col]) is not None
+                    and _s(row[sma50_col]) >= _s(row[sma200_col])
+                    for _, row in lookback_df.iterrows()
+                )
+                if was_above:
+                    patterns.append("Death Cross")
 
     # RSI signals
     rsi_col = f"RSI_{RSI_PERIOD}"

@@ -281,14 +281,18 @@ def generate_swing_signals(
 
     try:
         from signals.signal_logger import get_signal_logger
-        n_logged = get_signal_logger().log_signals(diverse)
-        logger.info(f"Swing signal log: {n_logged} new signals persisted")
-        if n_logged > 0:
+        _sl = get_signal_logger()
+        # Only collect signals that are genuinely NEW (not already in DB today)
+        new_signals = [s for s in diverse if _sl.log_signal(s)]
+        if new_signals:
+            logger.info(f"Swing signal log: {len(new_signals)} new signals persisted")
             try:
                 from notifications.telegram import notify_swing_signals
-                notify_swing_signals(diverse)
+                notify_swing_signals(new_signals)   # Only alert for truly new signals
             except Exception as te:
                 logger.warning(f"Telegram swing alert failed: {te}")
+        else:
+            logger.info("Swing signal log: all signals already exist — no Telegram alert sent")
     except Exception as e:
         logger.warning(f"Signal logging failed (swing): {e}")
 
