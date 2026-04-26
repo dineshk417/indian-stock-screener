@@ -563,7 +563,59 @@ class SignalLogger:
             "by_strategy":       by_strategy,
         }
 
-    def purge_non_trading_day_signals(self) -> int:
+    def get_duplicate_count(self) -> int:
+        """Return the number of duplicate signal rows currently in the DB."""
+        try:
+            with self._db_conn() as conn:
+                cur = self._exec(conn, """
+                    SELECT COALESCE(SUM(cnt - 1), 0) AS extra_rows FROM (
+                        SELECT COUNT(*) AS cnt
+                        FROM signal_log
+                        GROUP BY ticker, strategy, timeframe, signal_date
+                        HAVING cnt > 1
+                    ) t
+                """)
+                row = cur.fetchone()
+                return int(row[0] if row else 0)
+        except Exception as exc:
+            logger.error(f"get_duplicate_count failed: {exc}")
+            return -1
+
+    def purge_duplicates(self) -> int:
+        """
+        Delete all but the highest-id row for each (ticker, strategy, timeframe, signal_date)
+        group, then ensure the unique index exists.
+        Returns the number of rows deleted.
+        """
+        deleted = 0
+        try:
+            with self._db_conn() as conn:
+                cur = self._exec(conn, """
+                    DELETE FROM signal_log
+                    WHERE id NOT IN (
+                        SELECT MAX(id) FROM signal_log
+                        GROUP BY ticker, strategy, timeframe, signal_date
+                    )
+                """)
+                deleted = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            logger.info(f"purge_duplicates: removed {deleted} duplicate row(s).")
+        except Exception as exc:
+            logger.error(f"purge_duplicates DELETE failed: {exc}")
+            return -1
+
+        # Ensure the unique index exists after the cleanup
+        try:
+            with self._db_conn() as conn:
+                self._exec(conn, """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_sl_uniq_signal
+                    ON signal_log (ticker, strategy, timeframe, signal_date)
+                """)
+        except Exception as exc:
+            logger.warning(f"purge_duplicates: unique index creation failed: {exc}")
+
+        return deleted
+
+
         """
         Purge INTRADAY-only signals logged on weekends/holidays.
         SWING signals are intentionally kept — they're generated on any day and

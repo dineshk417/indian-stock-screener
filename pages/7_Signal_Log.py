@@ -145,6 +145,17 @@ log       = get_signal_logger()
 today_str = _dt.date.today().isoformat()
 now_ist   = _dt.datetime.now(IST)
 
+# Run dedup on every page load (cheap when no duplicates exist, fixes the DB
+# if the startup migration never ran or ran with old code).
+if not st.session_state.get("_dedup_done"):
+    try:
+        _dup_n = log.get_duplicate_count()
+        if _dup_n and _dup_n > 0:
+            log.purge_duplicates()
+        st.session_state["_dedup_done"] = True
+    except Exception:
+        pass
+
 # Auto-resolve: always run for stale signals, otherwise throttle to 5 min
 _open_all   = log.get_open_signals()
 _last_res   = st.session_state.get("_last_resolve_ts", 0)
@@ -246,7 +257,7 @@ with tab_live:
         unsafe_allow_html=True,
     )
 
-    _check_col, _ = st.columns([1, 3])
+    _check_col, _dedup_col, _ = st.columns([1, 1, 2])
     with _check_col:
         if st.button("🔄 Check Outcomes Now", use_container_width=True):
             with st.spinner("Resolving…"):
@@ -261,6 +272,20 @@ with tab_live:
                         st.info("Nothing resolved — all signals still active.")
                 except Exception as _e:
                     st.error(str(_e))
+
+    with _dedup_col:
+        _dup_count = log.get_duplicate_count()
+        _btn_label = f"🧹 Fix Duplicates ({_dup_count} extra rows)" if _dup_count > 0 else "✅ No Duplicates"
+        if st.button(_btn_label, use_container_width=True, disabled=(_dup_count == 0)):
+            with st.spinner("Removing duplicates…"):
+                _removed = log.purge_duplicates()
+                if _removed > 0:
+                    st.success(f"Removed {_removed} duplicate row(s). Refreshing…")
+                    st.rerun()
+                elif _removed == 0:
+                    st.info("No duplicates found.")
+                else:
+                    st.error("Dedup failed — check logs.")
 
     # Filter open signals by sidebar timeframe
     _open_filtered = [s for s in _open_all if timeframe is None or s["timeframe"] == timeframe]
