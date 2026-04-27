@@ -85,6 +85,7 @@ def rank_signals(open_sigs: list[dict]) -> list[tuple[float, dict, dict, Optiona
     """
     Score and rank all open signals.
     Returns list of (score, breakdown, signal_dict, curr_price) sorted descending.
+    Each ticker appears at most once (highest-scored entry wins).
     """
     if not open_sigs:
         return []
@@ -95,4 +96,13 @@ def rank_signals(open_sigs: list[dict]) -> list[tuple[float, dict, dict, Optiona
         sc, bd = score_signal(sig, cp)
         scored.append((sc, bd, sig, cp))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return scored
+
+    # One entry per ticker — highest score already at the front after sort.
+    seen: set[str] = set()
+    deduped = []
+    for item in scored:
+        ticker = item[2]["ticker"]
+        if ticker not in seen:
+            seen.add(ticker)
+            deduped.append(item)
+    return deduped

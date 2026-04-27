@@ -149,8 +149,12 @@ today_str = _dt.date.today().isoformat()
 now_ist   = _dt.datetime.now(IST)
 
 # Run dedup on every page load — no session-state guard.
-# get_duplicate_count() is a single aggregate query (~1 ms); purge only fires
-# when actual duplicates exist, so this is safe to run unconditionally.
+# Step 1: expire all but the latest OPEN per ticker (one open position rule).
+# Step 2: purge exact row-level duplicates (same ticker+strategy+timeframe+date).
+try:
+    log.close_duplicate_open_positions()
+except Exception:
+    pass
 try:
     _dup_n = log.get_duplicate_count()
     if _dup_n and _dup_n > 0:

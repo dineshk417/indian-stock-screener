@@ -454,15 +454,14 @@ class SignalLogger:
     # ── Read ───────────────────────────────────────────────────────────────────
 
     def get_open_signals(self, timeframe: Optional[str] = None) -> list[dict]:
-        # Return one row per logical signal (MAX id wins) so any DB duplicates
-        # that slipped through are collapsed before they reach the UI.
+        # One row per ticker (MAX id wins) — one open position per stock, always.
         if timeframe:
             sql = """
                 SELECT * FROM signal_log
                 WHERE id IN (
                     SELECT MAX(id) FROM signal_log
                     WHERE outcome=? AND timeframe=?
-                    GROUP BY ticker, strategy, timeframe, signal_date
+                    GROUP BY ticker
                 )
                 ORDER BY logged_at DESC
             """
@@ -473,7 +472,7 @@ class SignalLogger:
                 WHERE id IN (
                     SELECT MAX(id) FROM signal_log
                     WHERE outcome=?
-                    GROUP BY ticker, strategy, timeframe, signal_date
+                    GROUP BY ticker
                 )
                 ORDER BY logged_at DESC
             """
@@ -687,7 +686,37 @@ class SignalLogger:
 
         return deleted
 
+    def close_duplicate_open_positions(self) -> int:
+        """
+        Expire all but the most-recently-inserted OPEN signal for each ticker.
+        This enforces the one-open-position-per-ticker rule retroactively in the DB,
+        so stale duplicates can never surface in the UI.
+        Returns the number of rows updated (expired).
+        """
+        now_str = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+        sql = """
+            UPDATE signal_log
+            SET outcome = ?, outcome_at = ?
+            WHERE outcome = ?
+            AND id NOT IN (
+                SELECT MAX(id) FROM signal_log
+                WHERE outcome = ?
+                GROUP BY ticker
+            )
+        """
+        params = (OUTCOME_EXPIRED, now_str, OUTCOME_OPEN, OUTCOME_OPEN)
+        try:
+            with self._db_conn() as conn:
+                cur = self._exec(conn, sql, params)
+                n = cur.rowcount or 0
+            if n:
+                logger.info("close_duplicate_open_positions: expired %d stale duplicate(s).", n)
+            return n
+        except Exception as exc:
+            logger.error("close_duplicate_open_positions failed: %s", exc)
+            return 0
 
+    def purge_non_trading_day_signals(self) -> int:
         """
         Purge INTRADAY-only signals logged on weekends/holidays.
         SWING signals are intentionally kept — they're generated on any day and
