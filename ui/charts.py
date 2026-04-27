@@ -279,7 +279,148 @@ def ytd_performance_chart(index_data: dict) -> go.Figure:
     return fig
 
 
-def market_breadth_gauge(advances: int, declines: int) -> go.Figure:
+def sector_rotation_chart(rotation_data: list[dict]) -> go.Figure:
+    """
+    Sector Rotation Quadrant.
+    rotation_data: [{"sector": str, "rs": float, "momentum": float}]
+    rs       = sector 1M return minus Nifty 1M return (positive = outperforming)
+    momentum = sector 1M return minus sector 3M monthly avg (positive = accelerating)
+    """
+    if not rotation_data:
+        return go.Figure()
+
+    df = pd.DataFrame(rotation_data)
+
+    def _color(rs, mom):
+        if rs >= 0 and mom >= 0: return "#00c896"
+        if rs <  0 and mom >= 0: return "#f0b429"
+        if rs >= 0 and mom <  0: return "#f97316"
+        return "#ff4d6d"
+
+    def _qlabel(rs, mom):
+        if rs >= 0 and mom >= 0: return "Leading"
+        if rs <  0 and mom >= 0: return "Improving"
+        if rs >= 0 and mom <  0: return "Weakening"
+        return "Lagging"
+
+    df["color"]    = [_color(r, m)  for r, m in zip(df["rs"], df["momentum"])]
+    df["quadrant"] = [_qlabel(r, m) for r, m in zip(df["rs"], df["momentum"])]
+    df["short"]    = df["sector"].str.replace("Nifty ", "", regex=False)
+
+    xr = max(df["rs"].abs().max() * 1.55, 0.5)
+    yr = max(df["momentum"].abs().max() * 1.55, 0.5)
+
+    fig = go.Figure()
+
+    # Quadrant backgrounds
+    for (x0, y0, x1, y1, col) in [
+        (0,   0,   xr,  yr,  "rgba(0,200,150,0.06)"),
+        (-xr, 0,   0,   yr,  "rgba(240,180,41,0.06)"),
+        (0,  -yr,  xr,  0,   "rgba(249,115,22,0.06)"),
+        (-xr,-yr,  0,   0,   "rgba(255,77,109,0.06)"),
+    ]:
+        fig.add_shape(type="rect", x0=x0, y0=y0, x1=x1, y1=y1,
+                      fillcolor=col, line_width=0, layer="below")
+
+    fig.add_hline(y=0, line_color="rgba(255,255,255,0.12)", line_width=1)
+    fig.add_vline(x=0, line_color="rgba(255,255,255,0.12)", line_width=1)
+
+    for label, x, y, color in [
+        ("LEADING",   xr * 0.78,  yr * 0.88,  "#00c896"),
+        ("IMPROVING", -xr * 0.78, yr * 0.88,  "#f0b429"),
+        ("WEAKENING", xr * 0.78,  -yr * 0.88, "#f97316"),
+        ("LAGGING",   -xr * 0.78, -yr * 0.88, "#ff4d6d"),
+    ]:
+        fig.add_annotation(x=x, y=y, text=label, showarrow=False,
+                           font=dict(color=color, size=9, family="monospace"),
+                           opacity=0.45)
+
+    fig.add_trace(go.Scatter(
+        x=df["rs"], y=df["momentum"],
+        mode="markers+text",
+        text=df["short"],
+        textposition="top center",
+        textfont=dict(size=10, color="#e2e8f0"),
+        marker=dict(size=14, color=df["color"],
+                    line=dict(width=1.5, color="rgba(255,255,255,0.25)")),
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            "Rel. Strength: %{x:+.2f}%<br>"
+            "Momentum: %{y:+.2f}%<br>"
+            "<extra></extra>"
+        ),
+    ))
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=400,
+        margin=dict(l=60, r=20, t=20, b=60),
+        xaxis=dict(title="← Underperforming · Relative Strength vs Nifty (1M) · Outperforming →",
+                   range=[-xr, xr], showgrid=True, gridcolor="rgba(255,255,255,0.04)", zeroline=False),
+        yaxis=dict(title="← Weakening · Momentum (1M vs 3M avg) · Improving →",
+                   range=[-yr, yr], showgrid=True, gridcolor="rgba(255,255,255,0.04)", zeroline=False),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13,17,23,1)",
+        showlegend=False,
+    )
+    return fig
+
+
+def breadth_bar_chart(sma20: float, sma50: float, sma200: float,
+                       highs_52w: int, lows_52w: int) -> go.Figure:
+    """
+    Two-panel breadth chart:
+    Top — horizontal bars for % of Nifty 50 above SMA20 / SMA50 / SMA200
+    Bottom — 52W new highs vs new lows bar
+    """
+    fig = make_subplots(
+        rows=2, cols=1,
+        row_heights=[0.6, 0.4],
+        vertical_spacing=0.16,
+        subplot_titles=("% of Nifty 50 Stocks Above Key MAs", "New 52-Week Highs vs Lows"),
+    )
+
+    labels = ["SMA 200", "SMA 50", "SMA 20"]
+    values = [sma200, sma50, sma20]
+    colors = ["#8b5cf6", "#f0b429", "#60a5fa"]
+
+    fig.add_trace(go.Bar(
+        y=labels, x=values, orientation="h",
+        marker_color=colors, marker_opacity=0.85,
+        text=[f"{v:.0f}%" for v in values],
+        textposition="inside",
+        textfont=dict(color="white", size=12),
+        hovertemplate="%{y}: %{x:.1f}%<extra></extra>",
+    ), row=1, col=1)
+
+    fig.add_vline(x=50, line_dash="dash", line_color="rgba(255,255,255,0.2)", row=1, col=1)
+
+    fig.add_trace(go.Bar(
+        x=["52W Highs", "52W Lows"],
+        y=[highs_52w, lows_52w],
+        marker_color=["#00c896", "#ff4d6d"],
+        text=[str(highs_52w), str(lows_52w)],
+        textposition="outside",
+        textfont=dict(color="#e2e8f0", size=13),
+        hovertemplate="%{x}: %{y}<extra></extra>",
+    ), row=2, col=1)
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=360,
+        margin=dict(l=10, r=20, t=40, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(13,17,23,1)",
+        showlegend=False,
+    )
+    fig.update_xaxes(range=[0, 108], showgrid=False, row=1, col=1)
+    fig.update_xaxes(showgrid=False, row=2, col=1)
+    fig.update_yaxes(showgrid=False, row=2, col=1)
+    fig.update_traces(marker_line_width=0)
+    return fig
+
+
+
     """Gauge chart for market breadth."""
     total = advances + declines
     ratio = advances / total * 100 if total > 0 else 50

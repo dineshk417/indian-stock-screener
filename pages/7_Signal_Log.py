@@ -232,6 +232,212 @@ if _run_scan:
                 pass
         st.rerun()
 
+# ── Signal Ranker ──────────────────────────────────────────────────────────────
+def _score_signal(sig: dict, curr_price: float | None) -> tuple[float, dict]:
+    """
+    Composite score 0–100. Returns (score, breakdown_dict).
+    Five factors — each transparent so the user can see why a signal ranked high.
+    """
+    breakdown: dict = {}
+
+    # 1. Confidence  (0–25 pts)
+    conf = sig.get("confidence", 1) or 1
+    pts_conf = (conf / 5) * 25
+    breakdown["Confidence"] = round(pts_conf, 1)
+
+    # 2. Technical score  (0–20 pts)
+    tech = sig.get("technical_score") or 0.5
+    pts_tech = float(tech) * 20
+    breakdown["Technical"] = round(pts_tech, 1)
+
+    # 3. Fundamental score  (0–15 pts)
+    fund = sig.get("fundamental_score") or 0.5
+    pts_fund = float(fund) * 15
+    breakdown["Fundamental"] = round(pts_fund, 1)
+
+    # 4. Risk / Reward  (0–20 pts)  — RR 2 = 5 pts, RR 5 = 20 pts, capped at 5
+    rr = min(float(sig.get("risk_reward") or 2.0), 5.0)
+    pts_rr = max(0.0, ((rr - 1.0) / 4.0) * 20)
+    breakdown["Risk/Reward"] = round(pts_rr, 1)
+
+    # 5. Entry proximity  (0–20 pts)
+    # Full score when price is AT or BELOW entry (still a fresh opportunity).
+    # Penalise heavily once price has run >3 % past entry.
+    pts_prox = 10.0  # neutral if no price
+    prox_label = "Price unavailable"
+    if curr_price is not None:
+        entry   = float(sig.get("entry_price") or 0)
+        is_long = (sig.get("direction") or "LONG") == "LONG"
+        if entry > 0:
+            # Positive = moved in our favour past entry; negative = still below entry
+            moved_pct = ((curr_price - entry) / entry * 100) if is_long \
+                        else ((entry - curr_price) / entry * 100)
+            if moved_pct <= 0:
+                pts_prox, prox_label = 20, "At / below entry — ideal"
+            elif moved_pct <= 1:
+                pts_prox, prox_label = 17, f"+{moved_pct:.1f}% from entry"
+            elif moved_pct <= 2:
+                pts_prox, prox_label = 13, f"+{moved_pct:.1f}% from entry"
+            elif moved_pct <= 3:
+                pts_prox, prox_label = 8,  f"+{moved_pct:.1f}% from entry"
+            elif moved_pct <= 5:
+                pts_prox, prox_label = 3,  f"+{moved_pct:.1f}% — entry missed"
+            else:
+                pts_prox, prox_label = 0,  f"+{moved_pct:.1f}% — too late"
+    breakdown["Entry Timing"] = round(pts_prox, 1)
+
+    total = pts_conf + pts_tech + pts_fund + pts_rr + pts_prox
+    breakdown["_prox_label"] = prox_label
+    return round(total, 1), breakdown
+
+
+def _fetch_prices_bulk(sigs: list[dict]) -> dict[str, float | None]:
+    """Fetch latest price for each unique ticker in one pass."""
+    prices: dict[str, float | None] = {}
+    for sig in sigs:
+        ticker = sig["ticker"]
+        if ticker in prices:
+            continue
+        try:
+            _df = yf.Ticker(ticker).history(period="2d", interval="1d", auto_adjust=True)
+            prices[ticker] = float(_df["Close"].iloc[-1]) if _df is not None and not _df.empty else None
+        except Exception:
+            prices[ticker] = None
+    return prices
+
+
+# Rank all open signals — only when there are any
+_top3: list[dict] = []
+if open_signals:
+    _prices = _fetch_prices_bulk(open_signals)
+    _scored: list[tuple[float, dict, dict]] = []  # (score, breakdown, sig)
+    for _s in open_signals:
+        _cp = _prices.get(_s["ticker"])
+        _sc, _bd = _score_signal(_s, _cp)
+        _scored.append((_sc, _bd, _s, _cp))
+    _scored.sort(key=lambda x: x[0], reverse=True)
+    _top3 = _scored[:3]
+
+# ── TOP 3 PANEL ───────────────────────────────────────────────────────────────
+if _top3:
+    st.markdown(
+        '<div style="font-size:0.72rem;font-weight:700;color:#f0b429;'
+        'text-transform:uppercase;letter-spacing:0.1em;margin:4px 0 10px;">'
+        '⭐ Best Trades Right Now — Top 3 Ranked Signals</div>',
+        unsafe_allow_html=True,
+    )
+
+    _rank_colors  = ["#f0b429", "#94a3b8", "#cd7f32"]
+    _rank_labels  = ["#1 Best Setup", "#2 Strong Setup", "#3 Good Setup"]
+    _rank_borders = ["rgba(240,180,41,0.5)", "rgba(148,163,184,0.4)", "rgba(205,127,50,0.4)"]
+    _rank_bgs     = ["rgba(240,180,41,0.06)", "rgba(148,163,184,0.04)", "rgba(205,127,50,0.04)"]
+
+    top3_cols = st.columns(3)
+    for _rank_i, (_score, _bd, _sig, _cp) in enumerate(_top3):
+        _rc   = _rank_colors[_rank_i]
+        _rb   = _rank_borders[_rank_i]
+        _rbg  = _rank_bgs[_rank_i]
+        _rl   = _rank_labels[_rank_i]
+        _tick = _sig["ticker"].replace(".NS", "")
+        _dir  = _sig.get("direction", "LONG")
+        _dc   = "#00c896" if _dir == "LONG" else "#ff4d6d"
+        _da   = "↑ LONG" if _dir == "LONG" else "↓ SHORT"
+        _entry = float(_sig.get("entry_price") or 0)
+        _sl    = float(_sig.get("stop_loss")   or 0)
+        _t1    = float(_sig.get("target_1")    or 0)
+        _t2    = float(_sig.get("target_2")    or 0)
+        _rr    = float(_sig.get("risk_reward") or 0)
+        _strat = _sig.get("strategy", "")
+        _conf  = _sig.get("confidence", 0)
+        _prox  = _bd.get("_prox_label", "")
+        _cp_fmt = f"₹{_cp:,.2f}" if _cp else "—"
+
+        # Score bar segments (widths proportional to max possible per factor)
+        _factors = [
+            ("Conf",   _bd.get("Confidence",   0), 25, "#7c83fd"),
+            ("Tech",   _bd.get("Technical",    0), 20, "#60a5fa"),
+            ("Fund",   _bd.get("Fundamental",  0), 15, "#34d399"),
+            ("R:R",    _bd.get("Risk/Reward",  0), 20, "#f97316"),
+            ("Entry",  _bd.get("Entry Timing", 0), 20, "#f0b429"),
+        ]
+        bar_segs = "".join([
+            f'<div title="{fn}: {fv:.0f}/{fm}" style="height:4px;width:{fv/100*100:.0f}%;'
+            f'background:{fc};border-radius:2px;flex:0 0 {fm}%;"></div>'
+            for fn, fv, fm, fc in _factors
+        ])
+
+        with top3_cols[_rank_i]:
+            st.markdown(
+                f'<div style="background:{_rbg};border:1px solid {_rb};'
+                f'border-top:3px solid {_rc};border-radius:14px;padding:16px 18px;">'
+
+                # Rank badge + ticker
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">'
+                f'<div>'
+                f'<div style="font-size:0.6rem;font-weight:700;color:{_rc};text-transform:uppercase;'
+                f'letter-spacing:0.1em;margin-bottom:4px;">{_rl}</div>'
+                f'<div style="display:flex;align-items:center;gap:8px;">'
+                f'<span style="font-size:1.15rem;font-weight:800;color:#e2e8f0;">{_tick}</span>'
+                f'<span style="background:{_dc}22;color:{_dc};border:1px solid {_dc}44;'
+                f'border-radius:4px;padding:1px 7px;font-size:0.68rem;font-weight:700;">{_da}</span>'
+                f'</div>'
+                f'<div style="color:#64748b;font-size:0.7rem;margin-top:3px;">{_strat}</div>'
+                f'</div>'
+                # Score circle
+                f'<div style="text-align:center;">'
+                f'<div style="font-size:1.4rem;font-weight:900;color:{_rc};line-height:1;">{_score:.0f}</div>'
+                f'<div style="font-size:0.58rem;color:#475569;font-weight:600;">/ 100</div>'
+                f'</div>'
+                f'</div>'
+
+                # Score breakdown bar
+                f'<div style="display:flex;gap:2px;margin-bottom:10px;height:4px;">{bar_segs}</div>'
+
+                # Price grid
+                f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">'
+                f'<div style="background:rgba(255,255,255,0.04);border-radius:6px;padding:6px 8px;">'
+                f'<div style="font-size:0.55rem;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:2px;">Entry</div>'
+                f'<div style="font-size:0.85rem;font-weight:700;color:#e2e8f0;">₹{_entry:,.2f}</div>'
+                f'</div>'
+                f'<div style="background:rgba(255,255,255,0.04);border-radius:6px;padding:6px 8px;">'
+                f'<div style="font-size:0.55rem;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:2px;">Now</div>'
+                f'<div style="font-size:0.85rem;font-weight:700;color:#f1f5f9;">{_cp_fmt}</div>'
+                f'</div>'
+                f'<div style="background:rgba(255,77,109,0.08);border-radius:6px;padding:6px 8px;">'
+                f'<div style="font-size:0.55rem;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:2px;">Stop Loss</div>'
+                f'<div style="font-size:0.85rem;font-weight:700;color:#ff4d6d;">₹{_sl:,.2f}</div>'
+                f'</div>'
+                f'<div style="background:rgba(0,200,150,0.06);border-radius:6px;padding:6px 8px;">'
+                f'<div style="font-size:0.55rem;color:#64748b;font-weight:700;text-transform:uppercase;margin-bottom:2px;">Target 1</div>'
+                f'<div style="font-size:0.85rem;font-weight:700;color:#00c896;">₹{_t1:,.2f}</div>'
+                f'</div>'
+                f'</div>'
+
+                # R:R + Entry timing + Stars
+                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                f'<div>'
+                f'<span style="background:rgba(124,131,253,0.12);color:#7c83fd;border-radius:4px;'
+                f'padding:2px 8px;font-size:0.68rem;font-weight:700;">R:R {_rr:.1f}×</span>'
+                f'<span style="margin-left:6px;color:{"#00c896" if "ideal" in _prox or "below" in _prox else "#f0b429" if "missed" not in _prox and "late" not in _prox else "#ff4d6d"};'
+                f'font-size:0.68rem;font-weight:600;">{_prox}</span>'
+                f'</div>'
+                f'<div>{"★" * _conf}<span style="color:#374151;">{"★" * (5-_conf)}</span></div>'
+                f'</div>'
+
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<div style='margin-bottom:4px;'></div>", unsafe_allow_html=True)
+    st.caption(
+        "Score = Confidence (25) + Technical (20) + Fundamental (15) + Risk/Reward (20) + Entry Timing (20). "
+        "Entry Timing drops to 0 when price has moved >5% past your entry."
+    )
+    st.divider()
+
+elif open_signals:
+    pass  # signals exist but prices not fetched yet — tabs show them normally
+
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_live, tab_perf, tab_hist, tab_insights = st.tabs(["📍 Live Positions", "📊 Performance", "📜 History", "🧠 Insights"])
 
