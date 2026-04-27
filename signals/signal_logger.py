@@ -15,12 +15,25 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import pytz
+
+# Per-ticker mutex — serialises check+insert to prevent TOCTOU race when
+# the scheduler and _catchup_signals() fire concurrently for the same ticker.
+_ticker_locks: dict[str, threading.Lock] = {}
+_ticker_locks_guard = threading.Lock()
+
+
+def _get_ticker_lock(ticker: str) -> threading.Lock:
+    with _ticker_locks_guard:
+        if ticker not in _ticker_locks:
+            _ticker_locks[ticker] = threading.Lock()
+        return _ticker_locks[ticker]
 
 if TYPE_CHECKING:
     from signals.signal_models import TradeSignal
@@ -296,7 +309,15 @@ class SignalLogger:
     # ── Write ──────────────────────────────────────────────────────────────────
 
     def log_signal(self, signal: "TradeSignal") -> bool:
-        # One-trade-per-ticker rule: don't open a second position while one is OPEN
+        # Serialize per ticker so concurrent scans (scheduler + catchup) can't
+        # both see "0 OPEN" before either has committed its INSERT (TOCTOU fix).
+        with _get_ticker_lock(signal.ticker):
+            return self._log_signal_locked(signal)
+
+    def _log_signal_locked(self, signal: "TradeSignal") -> bool:
+        # One-trade-per-ticker rule: don't open a second position while one is OPEN.
+        # Fail-safe: if the guard check itself throws, refuse to insert (return False)
+        # rather than silently continuing — a missed signal is safer than a duplicate.
         try:
             with self._db_conn() as conn:
                 cur = self._exec(
@@ -315,7 +336,8 @@ class SignalLogger:
                     )
                     return False
         except Exception as _exc:
-            logger.warning("One-trade-per-ticker check failed (non-fatal): %s", _exc)
+            logger.warning("One-trade-per-ticker check failed — skipping insert: %s", _exc)
+            return False  # Fail-safe: guard failure → refuse to insert, never continue
 
         now_ist   = datetime.now(IST)
         date_str  = now_ist.strftime("%Y-%m-%d")
@@ -432,11 +454,29 @@ class SignalLogger:
     # ── Read ───────────────────────────────────────────────────────────────────
 
     def get_open_signals(self, timeframe: Optional[str] = None) -> list[dict]:
+        # Return one row per logical signal (MAX id wins) so any DB duplicates
+        # that slipped through are collapsed before they reach the UI.
         if timeframe:
-            sql    = "SELECT * FROM signal_log WHERE outcome=? AND timeframe=? ORDER BY logged_at DESC"
-            params = (OUTCOME_OPEN, timeframe)
+            sql = """
+                SELECT * FROM signal_log
+                WHERE id IN (
+                    SELECT MAX(id) FROM signal_log
+                    WHERE outcome=? AND timeframe=?
+                    GROUP BY ticker, strategy, timeframe, signal_date
+                )
+                ORDER BY logged_at DESC
+            """
+            params: tuple = (OUTCOME_OPEN, timeframe)
         else:
-            sql    = "SELECT * FROM signal_log WHERE outcome=? ORDER BY logged_at DESC"
+            sql = """
+                SELECT * FROM signal_log
+                WHERE id IN (
+                    SELECT MAX(id) FROM signal_log
+                    WHERE outcome=?
+                    GROUP BY ticker, strategy, timeframe, signal_date
+                )
+                ORDER BY logged_at DESC
+            """
             params = (OUTCOME_OPEN,)
         with self._db_conn() as conn:
             cur = self._exec(conn, sql, params)
@@ -461,8 +501,19 @@ class SignalLogger:
             clauses.append("outcome=?");    params.append(outcome)
 
         where = " AND ".join(clauses)
+        # Deduplicate at query time — one row per (ticker, strategy, timeframe, signal_date),
+        # keeping the highest id, so any duplicate rows never reach the caller.
+        dedup_sql = f"""
+            SELECT * FROM signal_log
+            WHERE id IN (
+                SELECT MAX(id) FROM signal_log
+                WHERE {where}
+                GROUP BY ticker, strategy, timeframe, signal_date
+            )
+            ORDER BY logged_at DESC
+        """
         with self._db_conn() as conn:
-            cur = self._exec(conn, f"SELECT * FROM signal_log WHERE {where} ORDER BY logged_at DESC", params)
+            cur = self._exec(conn, dedup_sql, params)
             return [dict(r) for r in cur.fetchall()]
 
     def get_performance_summary(

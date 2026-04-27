@@ -22,10 +22,20 @@ def _start_scheduler():
         logger.error(f"Scheduler failed to start: {e}")
 
 
+# Module-level flag — prevents catchup from running while the scheduler's
+# own scan is still in progress (or another catchup thread is live).
+_catchup_running = threading.Event()
+
+
 def _catchup_signals():
     from datetime import date
     from data.market_status import is_trading_day
     from datetime import datetime
+
+    # Another thread (scheduler or previous page load) is already generating —
+    # skip entirely to avoid concurrent dual-insert races.
+    if _catchup_running.is_set():
+        return
 
     ist = _pytz.timezone("Asia/Kolkata")
     now = datetime.now(ist)
@@ -40,6 +50,7 @@ def _catchup_signals():
         return
 
     def _generate():
+        _catchup_running.set()
         try:
             from signals.swing_signals import generate_swing_signals
             from config.stock_universe import NIFTY_50
@@ -51,6 +62,8 @@ def _catchup_signals():
                     generate_intraday_signals(tickers)
         except Exception as e:
             logger.error(f"Catch-up signal generation failed: {e}")
+        finally:
+            _catchup_running.clear()
 
     threading.Thread(target=_generate, daemon=True).start()
 

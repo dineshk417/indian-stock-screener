@@ -1,6 +1,7 @@
 """
 Page 7: Signal Log & Performance Dashboard
 """
+import logging
 import time
 import datetime as _dt
 
@@ -9,6 +10,8 @@ import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
 import pytz
+
+logger = logging.getLogger(__name__)
 
 try:
     from signals.signal_logger import (
@@ -145,16 +148,16 @@ log       = get_signal_logger()
 today_str = _dt.date.today().isoformat()
 now_ist   = _dt.datetime.now(IST)
 
-# Run dedup on every page load (cheap when no duplicates exist, fixes the DB
-# if the startup migration never ran or ran with old code).
-if not st.session_state.get("_dedup_done"):
-    try:
-        _dup_n = log.get_duplicate_count()
-        if _dup_n and _dup_n > 0:
-            log.purge_duplicates()
-        st.session_state["_dedup_done"] = True
-    except Exception:
-        pass
+# Run dedup on every page load — no session-state guard.
+# get_duplicate_count() is a single aggregate query (~1 ms); purge only fires
+# when actual duplicates exist, so this is safe to run unconditionally.
+try:
+    _dup_n = log.get_duplicate_count()
+    if _dup_n and _dup_n > 0:
+        log.purge_duplicates()
+        logger.info("Signal Log: purged %d duplicate row(s) on page load.", _dup_n)
+except Exception:
+    pass
 
 # Auto-resolve: always run for stale signals, otherwise throttle to 5 min
 _open_all   = log.get_open_signals()
