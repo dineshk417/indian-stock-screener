@@ -436,6 +436,101 @@ with t_home:
             unsafe_allow_html=True,
         )
 
+    # ── TOP 3 RANKED SIGNALS ──────────────────────────────────────────────────
+    @st.cache_data(ttl=300)
+    def _home_top3():
+        try:
+            from signals.signal_ranker import rank_signals
+            from signals.signal_logger import get_signal_logger, OUTCOME_OPEN
+            _log   = get_signal_logger()
+            _opens = _log.get_open_signals()
+            return rank_signals(_opens)[:3]
+        except Exception:
+            return []
+
+    _h3 = _home_top3()
+    if _h3:
+        st.markdown(
+            '<div style="font-size:0.68rem;font-weight:700;color:#f0b429;'
+            'text-transform:uppercase;letter-spacing:0.1em;margin:20px 0 12px;">'
+            '⭐ Best Trades Right Now</div>',
+            unsafe_allow_html=True,
+        )
+        _rank_colors  = ["#f0b429", "#94a3b8", "#cd7f32"]
+        _rank_borders = ["rgba(240,180,41,0.45)", "rgba(148,163,184,0.35)", "rgba(205,127,50,0.35)"]
+        _rank_bgs     = ["rgba(240,180,41,0.05)", "rgba(148,163,184,0.03)", "rgba(205,127,50,0.04)"]
+        _rank_medals  = ["🥇", "🥈", "🥉"]
+        _h3_cols = st.columns(len(_h3))
+        for _hi, (_hsc, _hbd, _hsig, _hcp) in enumerate(_h3):
+            _hrc  = _rank_colors[_hi]
+            _htick = _hsig["ticker"].replace(".NS", "")
+            _hdir  = _hsig.get("direction", "LONG")
+            _hdc   = "#00c896" if _hdir == "LONG" else "#ff4d6d"
+            _hda   = "↑ L" if _hdir == "LONG" else "↓ S"
+            _he    = float(_hsig.get("entry_price") or 0)
+            _hsl   = float(_hsig.get("stop_loss")   or 0)
+            _ht1   = float(_hsig.get("target_1")    or 0)
+            _hrr   = float(_hsig.get("risk_reward")  or 0)
+            _hstrat = _hsig.get("strategy", "")
+            _hprox = _hbd.get("_prox_label", "")
+            _hcp_fmt = f"₹{_hcp:,.1f}" if _hcp else "—"
+            _hconf = _hsig.get("confidence", 0)
+            # compact score bar
+            _hbar = "".join([
+                f'<div style="height:3px;flex:0 0 {fm}%;background:{fc};opacity:0.85;border-radius:2px;"></div>'
+                for _, fv, fm, fc in [
+                    ("C",  _hbd.get("Confidence",  0), 25, "#7c83fd"),
+                    ("T",  _hbd.get("Technical",   0), 20, "#60a5fa"),
+                    ("F",  _hbd.get("Fundamental", 0), 15, "#34d399"),
+                    ("RR", _hbd.get("Risk/Reward", 0), 20, "#f97316"),
+                    ("E",  _hbd.get("Entry Timing",0), 20, "#f0b429"),
+                ]
+            ])
+            with _h3_cols[_hi]:
+                st.markdown(
+                    f'<div style="background:{_rank_bgs[_hi]};border:1px solid {_rank_borders[_hi]};'
+                    f'border-top:3px solid {_hrc};border-radius:14px;padding:14px 16px;">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+                    f'<div style="display:flex;align-items:center;gap:7px;">'
+                    f'<span style="font-size:1rem;">{_rank_medals[_hi]}</span>'
+                    f'<span style="font-size:1rem;font-weight:800;color:#e2e8f0;">{_htick}</span>'
+                    f'<span style="background:{_hdc}22;color:{_hdc};border:1px solid {_hdc}33;'
+                    f'border-radius:4px;padding:1px 6px;font-size:0.62rem;font-weight:700;">{_hda}</span>'
+                    f'</div>'
+                    f'<div style="text-align:right;">'
+                    f'<div style="font-size:1.1rem;font-weight:900;color:{_hrc};line-height:1;">{_hsc:.0f}</div>'
+                    f'<div style="font-size:0.55rem;color:#475569;">/100</div>'
+                    f'</div>'
+                    f'</div>'
+                    f'<div style="display:flex;gap:2px;margin-bottom:8px;">{_hbar}</div>'
+                    f'<div style="color:#64748b;font-size:0.65rem;margin-bottom:8px;">{_hstrat}</div>'
+                    f'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px;">'
+                    f'<div style="text-align:center;background:rgba(255,255,255,0.04);border-radius:5px;padding:4px;">'
+                    f'<div style="font-size:0.52rem;color:#374151;">Entry</div>'
+                    f'<div style="font-size:0.78rem;font-weight:700;color:#e2e8f0;">₹{_he:,.0f}</div></div>'
+                    f'<div style="text-align:center;background:rgba(255,77,109,0.07);border-radius:5px;padding:4px;">'
+                    f'<div style="font-size:0.52rem;color:#374151;">SL</div>'
+                    f'<div style="font-size:0.78rem;font-weight:700;color:#ff4d6d;">₹{_hsl:,.0f}</div></div>'
+                    f'<div style="text-align:center;background:rgba(0,200,150,0.06);border-radius:5px;padding:4px;">'
+                    f'<div style="font-size:0.52rem;color:#374151;">T1</div>'
+                    f'<div style="font-size:0.78rem;font-weight:700;color:#00c896;">₹{_ht1:,.0f}</div></div>'
+                    f'</div>'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                    f'<span style="font-size:0.65rem;color:#475569;">{_hcp_fmt} now · R:R {_hrr:.1f}×</span>'
+                    f'<span style="color:{"#00c896" if "✓" in _hprox or "below" in _hprox else "#f0b429" if "missed" not in _hprox and "late" not in _hprox else "#ff4d6d"};'
+                    f'font-size:0.62rem;font-weight:600;">{_hprox}</span>'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        st.markdown(
+            '<a href="/Signal_Log" style="display:inline-flex;align-items:center;gap:5px;'
+            'margin-top:8px;text-decoration:none;color:#f0b429;font-size:0.75rem;font-weight:600;">'
+            'See all ranked signals →</a>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div style="margin-bottom:6px;"></div>', unsafe_allow_html=True)
+
     # ── MARKET MOVERS ──────────────────────────────────────────────────────────
     gainers, losers = _movers()
 

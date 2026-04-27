@@ -233,90 +233,9 @@ if _run_scan:
         st.rerun()
 
 # ── Signal Ranker ──────────────────────────────────────────────────────────────
-def _score_signal(sig: dict, curr_price: float | None) -> tuple[float, dict]:
-    """
-    Composite score 0–100. Returns (score, breakdown_dict).
-    Five factors — each transparent so the user can see why a signal ranked high.
-    """
-    breakdown: dict = {}
+from signals.signal_ranker import rank_signals as _rank_signals
 
-    # 1. Confidence  (0–25 pts)
-    conf = sig.get("confidence", 1) or 1
-    pts_conf = (conf / 5) * 25
-    breakdown["Confidence"] = round(pts_conf, 1)
-
-    # 2. Technical score  (0–20 pts)
-    tech = sig.get("technical_score") or 0.5
-    pts_tech = float(tech) * 20
-    breakdown["Technical"] = round(pts_tech, 1)
-
-    # 3. Fundamental score  (0–15 pts)
-    fund = sig.get("fundamental_score") or 0.5
-    pts_fund = float(fund) * 15
-    breakdown["Fundamental"] = round(pts_fund, 1)
-
-    # 4. Risk / Reward  (0–20 pts)  — RR 2 = 5 pts, RR 5 = 20 pts, capped at 5
-    rr = min(float(sig.get("risk_reward") or 2.0), 5.0)
-    pts_rr = max(0.0, ((rr - 1.0) / 4.0) * 20)
-    breakdown["Risk/Reward"] = round(pts_rr, 1)
-
-    # 5. Entry proximity  (0–20 pts)
-    # Full score when price is AT or BELOW entry (still a fresh opportunity).
-    # Penalise heavily once price has run >3 % past entry.
-    pts_prox = 10.0  # neutral if no price
-    prox_label = "Price unavailable"
-    if curr_price is not None:
-        entry   = float(sig.get("entry_price") or 0)
-        is_long = (sig.get("direction") or "LONG") == "LONG"
-        if entry > 0:
-            # Positive = moved in our favour past entry; negative = still below entry
-            moved_pct = ((curr_price - entry) / entry * 100) if is_long \
-                        else ((entry - curr_price) / entry * 100)
-            if moved_pct <= 0:
-                pts_prox, prox_label = 20, "At / below entry — ideal"
-            elif moved_pct <= 1:
-                pts_prox, prox_label = 17, f"+{moved_pct:.1f}% from entry"
-            elif moved_pct <= 2:
-                pts_prox, prox_label = 13, f"+{moved_pct:.1f}% from entry"
-            elif moved_pct <= 3:
-                pts_prox, prox_label = 8,  f"+{moved_pct:.1f}% from entry"
-            elif moved_pct <= 5:
-                pts_prox, prox_label = 3,  f"+{moved_pct:.1f}% — entry missed"
-            else:
-                pts_prox, prox_label = 0,  f"+{moved_pct:.1f}% — too late"
-    breakdown["Entry Timing"] = round(pts_prox, 1)
-
-    total = pts_conf + pts_tech + pts_fund + pts_rr + pts_prox
-    breakdown["_prox_label"] = prox_label
-    return round(total, 1), breakdown
-
-
-def _fetch_prices_bulk(sigs: list[dict]) -> dict[str, float | None]:
-    """Fetch latest price for each unique ticker in one pass."""
-    prices: dict[str, float | None] = {}
-    for sig in sigs:
-        ticker = sig["ticker"]
-        if ticker in prices:
-            continue
-        try:
-            _df = yf.Ticker(ticker).history(period="2d", interval="1d", auto_adjust=True)
-            prices[ticker] = float(_df["Close"].iloc[-1]) if _df is not None and not _df.empty else None
-        except Exception:
-            prices[ticker] = None
-    return prices
-
-
-# Rank all open signals — only when there are any
-_top3: list[dict] = []
-if open_signals:
-    _prices = _fetch_prices_bulk(open_signals)
-    _scored: list[tuple[float, dict, dict]] = []  # (score, breakdown, sig)
-    for _s in open_signals:
-        _cp = _prices.get(_s["ticker"])
-        _sc, _bd = _score_signal(_s, _cp)
-        _scored.append((_sc, _bd, _s, _cp))
-    _scored.sort(key=lambda x: x[0], reverse=True)
-    _top3 = _scored[:3]
+_top3 = _rank_signals(open_signals)[:3]
 
 # ── TOP 3 PANEL ───────────────────────────────────────────────────────────────
 if _top3:
@@ -418,7 +337,7 @@ if _top3:
                 f'<div>'
                 f'<span style="background:rgba(124,131,253,0.12);color:#7c83fd;border-radius:4px;'
                 f'padding:2px 8px;font-size:0.68rem;font-weight:700;">R:R {_rr:.1f}×</span>'
-                f'<span style="margin-left:6px;color:{"#00c896" if "ideal" in _prox or "below" in _prox else "#f0b429" if "missed" not in _prox and "late" not in _prox else "#ff4d6d"};'
+                f'<span style="margin-left:6px;color:{"#00c896" if "✓" in _prox or "below" in _prox else "#f0b429" if "missed" not in _prox and "late" not in _prox else "#ff4d6d"};'
                 f'font-size:0.68rem;font-weight:600;">{_prox}</span>'
                 f'</div>'
                 f'<div>{"★" * _conf}<span style="color:#374151;">{"★" * (5-_conf)}</span></div>'

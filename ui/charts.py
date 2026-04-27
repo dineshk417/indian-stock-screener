@@ -421,6 +421,7 @@ def breadth_bar_chart(sma20: float, sma50: float, sma200: float,
 
 
 
+def market_breadth_gauge(advances: int, declines: int) -> go.Figure:
     """Gauge chart for market breadth."""
     total = advances + declines
     ratio = advances / total * 100 if total > 0 else 50
