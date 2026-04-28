@@ -40,6 +40,34 @@ ShareSaathi is an AI-powered Indian stock screener built with Streamlit.
 | `config/settings.py` | Thresholds, TTLs, indicator params |
 | `config/stock_universe.py` | Nifty 50 / Nifty 200 ticker lists |
 
+## Scheduled Jobs (IST, Mon–Fri trading days only)
+
+| Time  | Job | Description |
+|-------|-----|-------------|
+| 8:30 AM | `run_price_warmup` | Pre-fetch OHLCV into SQLite price store |
+| 8:45 AM | `run_pre_market_scan` | Fetch news, generate swing signals, send morning briefing |
+| 9:30 AM | `run_intraday_signal_scan` | Generate intraday signals after first full candle |
+| 10:00 AM | `run_daily_top3` | **Send Top 3 ranked open signals to Telegram** |
+| 12:00 PM | `run_midday_update` | Mid-day market snapshot to Telegram |
+| 3:35 PM | `run_closing_update` | Market closing summary to Telegram |
+| 4:00 PM | `run_post_market_scan` | Full technical screen of Nifty 200 |
+| 4:30 PM | `run_outcome_tracker` | Resolve open signal outcomes (SL/T1/T2 hits) |
+| Every 5 min | `run_intraday_refresh` | Invalidate 5m cache + check intraday position exits |
+
+## Telegram Notifications
+
+Required secrets (Streamlit Cloud → App Settings → Secrets):
+```toml
+TELEGRAM_BOT_TOKEN  = "..."   # from @BotFather
+TELEGRAM_CHANNEL_ID = "..."   # e.g. @YourChannel or -100xxxxxxxxxx
+```
+
+Key functions in `notifications/telegram.py`:
+- `send_top3_signals()` — ranks all OPEN signals (via `signal_ranker`) and sends Top 3 daily at 10 AM
+- `format_top3_signals(ranked)` — formats ranked list into a Telegram HTML message
+- `notify_swing_signals(signals)` / `notify_intraday_signals(signals)` — per-signal alerts on generation
+- `send_message(text)` — raw send; all formatters funnel through this
+
 ## Core Rules
 
 - **One open position per ticker**: `signal_logger.log_signal()` checks for an existing OPEN row before inserting. Never bypass this guard.

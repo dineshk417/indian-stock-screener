@@ -254,3 +254,90 @@ def notify_intraday_signals(signals: list) -> int:
         except Exception as e:
             logger.error(f"Failed to send intraday signal alert: {e}")
     return sent
+
+
+# ── Daily Top 3 ────────────────────────────────────────────────────────────────
+
+_MEDAL = ["🥇", "🥈", "🥉"]
+_SCORE_BAR_FILLED   = "█"
+_SCORE_BAR_EMPTY    = "░"
+
+
+def _score_bar(score: float, width: int = 10) -> str:
+    filled = round(score / 100 * width)
+    return _SCORE_BAR_FILLED * filled + _SCORE_BAR_EMPTY * (width - filled)
+
+
+def format_top3_signals(ranked: list) -> str:
+    """
+    Format the top 3 ranked open signals into a single Telegram message.
+    ranked: list of (score, breakdown, signal_dict, curr_price) from rank_signals()
+    """
+    now  = datetime.now(IST).strftime("%d %b %Y %H:%M IST")
+    top  = ranked[:3]
+    lines = [
+        "⭐ <b>Top 3 Trade Ideas — ShareSaathi</b>",
+        f"━━━━━━━━━━━━━━━━━━━━",
+        f"🕐 {now}\n",
+    ]
+
+    for i, (score, bd, sig, curr_price) in enumerate(top):
+        ticker  = sig.get("ticker", "").replace(".NS", "")
+        strat   = sig.get("strategy", "")
+        tf      = sig.get("timeframe", "")
+        direction = sig.get("direction", "LONG")
+        entry   = float(sig.get("entry_price") or 0)
+        sl      = float(sig.get("stop_loss")   or 0)
+        t1      = float(sig.get("target_1")    or 0)
+        t2      = float(sig.get("target_2")    or 0)
+        rr      = float(sig.get("risk_reward") or 0)
+        conf    = sig.get("confidence") or 0
+        prox    = bd.get("_prox_label", "")
+        dir_lbl = "🟢 LONG" if direction == "LONG" else "🔴 SHORT"
+        tf_lbl  = "📅 Swing" if tf == "SWING" else "⚡ Intraday"
+        cp_lbl  = f"₹{curr_price:,.1f}" if curr_price else "—"
+
+        lines += [
+            f"{_MEDAL[i]} <b>{ticker}</b>  {dir_lbl}  {tf_lbl}",
+            f"Strategy: {strat}",
+            f"Score:    {score:.0f}/100  {_score_bar(score)}",
+            f"Conf:     {'★' * conf}{'☆' * (5 - conf)}",
+            f"",
+            f"  Entry ₹{entry:,.2f}  |  Now {cp_lbl}",
+            f"  SL    ₹{sl:,.2f}  |  T1  ₹{t1:,.2f}  |  T2  ₹{t2:,.2f}",
+            f"  R:R   1:{rr:.1f}  |  {prox}",
+        ]
+        if i < len(top) - 1:
+            lines.append("─────────────────────")
+
+    lines += [
+        "",
+        "🔗 <a href='https://stockscreener4.streamlit.app/Signal_Log'>Full Signal Log →</a>",
+    ]
+    return "\n".join(lines)
+
+
+def send_top3_signals() -> bool:
+    """
+    Fetch open signals, rank them, and send the Top 3 to Telegram.
+    Returns True if the message was sent successfully.
+    """
+    if not is_configured():
+        logger.warning("Telegram not configured — skipping Top 3 alert.")
+        return False
+    try:
+        from signals.signal_logger import get_signal_logger
+        from signals.signal_ranker import rank_signals
+        open_sigs = get_signal_logger().get_open_signals()
+        ranked    = rank_signals(open_sigs)
+        if not ranked:
+            logger.info("Top 3 Telegram: no open signals to send.")
+            return False
+        msg = format_top3_signals(ranked)
+        ok  = send_message(msg)
+        if ok:
+            logger.info("Top 3 daily signal alert sent to Telegram.")
+        return ok
+    except Exception as e:
+        logger.error(f"send_top3_signals failed: {e}")
+        return False

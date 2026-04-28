@@ -118,6 +118,18 @@ def _send_market_update(label: str) -> bool:
         raise   # re-raise so callers can surface the error
 
 
+def run_daily_top3():
+    """10:00 AM IST — Send top 3 ranked open signals to Telegram."""
+    if not is_trading_day():
+        return
+    logger.info(f"[{datetime.now(IST)}] Sending daily Top 3 signal alert...")
+    try:
+        from notifications.telegram import send_top3_signals
+        send_top3_signals()
+    except Exception as e:
+        logger.error(f"Daily Top 3 alert failed: {e}")
+
+
 def run_midday_update():
     """12:00 PM IST — Mid-day market snapshot."""
     if not is_trading_day():
@@ -228,6 +240,13 @@ def build_scheduler() -> BackgroundScheduler:
         run_intraday_signal_scan,
         CronTrigger(hour=9, minute=30, day_of_week="0-4", timezone=IST),
         id="intraday_signal_scan", replace_existing=True, misfire_grace_time=GRACE,
+    )
+
+    # Daily Top 3: 10:00 AM IST Mon-Fri — after swing (8:45) + intraday (9:30) are both done
+    scheduler.add_job(
+        run_daily_top3,
+        CronTrigger(hour=10, minute=0, day_of_week="0-4", timezone=IST),
+        id="daily_top3", replace_existing=True, misfire_grace_time=GRACE,
     )
 
     # Mid-day update: 12:00 PM IST Mon-Fri
