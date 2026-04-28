@@ -81,11 +81,23 @@ def fetch_prices(sigs: list[dict]) -> dict[str, Optional[float]]:
     return prices
 
 
+def _sl_breached(sig: dict, curr_price: Optional[float]) -> bool:
+    """Return True if the current price has already hit or crossed the stop loss."""
+    if curr_price is None:
+        return False
+    sl = float(sig.get("stop_loss") or 0)
+    if sl <= 0:
+        return False
+    is_long = (sig.get("direction") or "LONG") == "LONG"
+    return curr_price <= sl if is_long else curr_price >= sl
+
+
 def rank_signals(open_sigs: list[dict]) -> list[tuple[float, dict, dict, Optional[float]]]:
     """
     Score and rank all open signals.
     Returns list of (score, breakdown, signal_dict, curr_price) sorted descending.
     Each ticker appears at most once (highest-scored entry wins).
+    Signals whose current price has already breached stop loss are excluded.
     """
     if not open_sigs:
         return []
@@ -93,6 +105,8 @@ def rank_signals(open_sigs: list[dict]) -> list[tuple[float, dict, dict, Optiona
     scored = []
     for sig in open_sigs:
         cp = prices.get(sig["ticker"])
+        if _sl_breached(sig, cp):
+            continue
         sc, bd = score_signal(sig, cp)
         scored.append((sc, bd, sig, cp))
     scored.sort(key=lambda x: x[0], reverse=True)
