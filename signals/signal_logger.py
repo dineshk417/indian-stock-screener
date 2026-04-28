@@ -527,17 +527,27 @@ class SignalLogger:
             clauses.append("timeframe=?"); params.append(timeframe)
         where = " AND ".join(clauses)
 
+        # Same dedup logic as get_signals(): keep only MAX(id) per
+        # (ticker, strategy, timeframe, signal_date) so expired duplicates
+        # created by close_duplicate_open_positions() don't inflate counts.
+        dedup_sub = (
+            f"SELECT MAX(id) FROM signal_log WHERE {where} "
+            f"GROUP BY ticker, strategy, timeframe, signal_date"
+        )
+
         with self._db_conn() as conn:
             cur = self._exec(
                 conn,
-                f"SELECT outcome, COUNT(*) AS cnt FROM signal_log WHERE {where} GROUP BY outcome",
+                f"SELECT outcome, COUNT(*) AS cnt FROM signal_log "
+                f"WHERE id IN ({dedup_sub}) GROUP BY outcome",
                 params,
             )
             by_outcome = {r["outcome"]: r["cnt"] for r in cur.fetchall()}
 
             cur = self._exec(
                 conn,
-                f"SELECT AVG(pnl_r) AS avg_r FROM signal_log WHERE {where} AND outcome NOT IN (?,?)",
+                f"SELECT AVG(pnl_r) AS avg_r FROM signal_log "
+                f"WHERE id IN ({dedup_sub}) AND outcome NOT IN (?,?)",
                 params + [OUTCOME_OPEN, OUTCOME_EXPIRED],
             )
             avg_r_row = cur.fetchone()
@@ -550,7 +560,7 @@ class SignalLogger:
                        AVG(cost_total_inr) AS avg_cost,
                        SUM(cost_total_inr) AS total_cost
                 FROM signal_log
-                WHERE {where} AND outcome NOT IN (?,?)
+                WHERE id IN ({dedup_sub}) AND outcome NOT IN (?,?)
                 """,
                 params + [OUTCOME_OPEN, OUTCOME_EXPIRED],
             )
@@ -567,7 +577,7 @@ class SignalLogger:
                        SUM(CASE WHEN outcome NOT IN (?,?) THEN net_pnl_inr END)  AS net_pnl,
                        AVG(CASE WHEN outcome NOT IN (?,?) THEN net_pnl_inr END)  AS avg_net_pnl
                 FROM signal_log
-                WHERE {where}
+                WHERE id IN ({dedup_sub})
                 GROUP BY strategy
                 """,
                 [
@@ -582,7 +592,8 @@ class SignalLogger:
 
             cur = self._exec(
                 conn,
-                f"SELECT COUNT(*) AS cnt FROM signal_log WHERE {where} AND outcome=? AND pnl_r > 0",
+                f"SELECT COUNT(*) AS cnt FROM signal_log "
+                f"WHERE id IN ({dedup_sub}) AND outcome=? AND pnl_r > 0",
                 params + [OUTCOME_SQUARED_OFF],
             )
             sq_profitable = (cur.fetchone() or {}).get("cnt", 0) or 0

@@ -698,6 +698,30 @@ with tab_perf:
     )
     st.markdown(kpi_html, unsafe_allow_html=True)
 
+    # Data quality notice — show when expired signals are disproportionately high
+    # (symptom of historical duplicate OPEN signals that were expired on cleanup)
+    _expired_n = perf.get("expired", 0)
+    if _expired_n > 0 and total_closed > 0 and _expired_n > total_closed * 0.5:
+        st.markdown(
+            f'<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.15);'
+            f'border-left:3px solid #f0b429;border-radius:10px;padding:10px 16px;'
+            f'margin-bottom:12px;font-size:0.75rem;color:#94a3b8;">'
+            f'<span style="color:#f0b429;font-weight:700;">ℹ Data note · </span>'
+            f'{_expired_n} expired signal(s) in this period are excluded from all P&L metrics. '
+            f'A high expired count usually reflects historical duplicate OPEN signals that were '
+            f'cleaned up — it does not affect win rate or net P&L, which only count resolved trades. '
+            f'Portfolio return assumes a fixed ₹{int(position_size):,} position per trade.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    elif total_closed > 0:
+        st.markdown(
+            f'<div style="font-size:0.67rem;color:#374151;margin-bottom:10px;">'
+            f'Portfolio return assumes a fixed ₹{int(position_size):,} position per trade · '
+            f'P&L excludes {_expired_n} expired signal(s)</div>',
+            unsafe_allow_html=True,
+        )
+
     if perf["total"] == 0:
         st.markdown(
             '<div style="background:rgba(124,131,253,0.06);border:1px solid rgba(124,131,253,0.12);'
