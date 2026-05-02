@@ -47,18 +47,19 @@ def score_signal(sig: dict, curr_price: Optional[float]) -> tuple[float, dict]:
         if entry > 0:
             moved_pct = ((curr_price - entry) / entry * 100) if is_long \
                         else ((entry - curr_price) / entry * 100)
+            fmt = f"+{moved_pct:.2f}%" if moved_pct < 0.1 else f"+{moved_pct:.1f}%"
             if moved_pct <= 0:
                 pts_prox, prox_label = 20, "At / below entry ✓"
             elif moved_pct <= 1:
-                pts_prox, prox_label = 17, f"+{moved_pct:.1f}% from entry"
+                pts_prox, prox_label = 17, f"{fmt} from entry"
             elif moved_pct <= 2:
-                pts_prox, prox_label = 13, f"+{moved_pct:.1f}% from entry"
+                pts_prox, prox_label = 13, f"{fmt} from entry"
             elif moved_pct <= 3:
-                pts_prox, prox_label = 8,  f"+{moved_pct:.1f}% from entry"
+                pts_prox, prox_label = 8,  f"{fmt} from entry"
             elif moved_pct <= 5:
-                pts_prox, prox_label = 3,  f"+{moved_pct:.1f}% — entry missed"
+                pts_prox, prox_label = 3,  f"{fmt} — entry missed"
             else:
-                pts_prox, prox_label = 0,  f"+{moved_pct:.1f}% — too late"
+                pts_prox, prox_label = 0,  f"{fmt} — too late"
     bd["Entry Timing"]  = round(pts_prox, 1)
     bd["_prox_label"]   = prox_label
 
@@ -67,12 +68,25 @@ def score_signal(sig: dict, curr_price: Optional[float]) -> tuple[float, dict]:
 
 
 def fetch_prices(sigs: list[dict]) -> dict[str, Optional[float]]:
-    """Fetch latest close price for each unique ticker in one pass."""
+    """
+    Fetch the most current price for each unique ticker.
+    Uses fast_info.last_price (live/last-traded) as the primary source so
+    intraday movement is captured — not just yesterday's close, which would
+    equal the entry price and show 0% movement in the Top 3 message.
+    Falls back to the last daily close if fast_info fails.
+    """
     prices: dict[str, Optional[float]] = {}
     for sig in sigs:
         ticker = sig["ticker"]
         if ticker in prices:
             continue
+        try:
+            lp = float(yf.Ticker(ticker).fast_info.last_price)
+            if lp > 0:
+                prices[ticker] = lp
+                continue
+        except Exception:
+            pass
         try:
             df = yf.Ticker(ticker).history(period="2d", interval="1d", auto_adjust=True)
             prices[ticker] = float(df["Close"].iloc[-1]) if df is not None and not df.empty else None

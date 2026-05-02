@@ -10,7 +10,10 @@ import yfinance as yf
 
 from data.fetcher import fetch_index_data, fetch_stock_data
 from data.market_status import market_status, is_market_open
-from ui.charts import sector_heatmap, market_breadth_gauge, ytd_performance_chart
+from ui.charts import (
+    sector_heatmap, market_breadth_gauge, ytd_performance_chart,
+    sector_rotation_chart, breadth_bar_chart,
+)
 from config.settings import INDICES
 from config.stock_universe import NIFTY_50
 
@@ -28,7 +31,7 @@ def _live_quote(ticker: str) -> dict:
         return {}
 
 
-# ── Page shell (static — renders once per page load) ──────────────────────────
+# ── Page shell ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Market Overview · ShareSaathi", layout="wide", page_icon="📊")
 from ui.styles import inject_global_css; inject_global_css()
 
@@ -75,7 +78,7 @@ else:
         unsafe_allow_html=True,
     )
 
-# ── Load 1Y daily history once (used for chart + YTD calc inside fragment) ────
+# ── Load 1Y daily history once (used for intelligence strip + YTD chart) ──────
 main_indices   = {k: v for k, v in INDICES.items() if k in ["Nifty 50", "Bank Nifty", "Sensex"]}
 _vix_ticker    = "^INDIAVIX"
 sector_indices = {k: v for k, v in INDICES.items() if k not in main_indices}
@@ -89,14 +92,13 @@ for _name, _ticker in main_indices.items():
 # ── Global Markets (cached, refreshes every 5 min) ────────────────────────────
 @st.cache_data(ttl=300)
 def _global_markets_data():
-    import yfinance as yf
     items = [
-        ("S&P 500",  "^GSPC",    False),
-        ("Dow Jones","^DJI",     False),
-        ("Nasdaq",   "^IXIC",    False),
-        ("Crude Oil","CL=F",     True),
-        ("Gold",     "GC=F",     True),
-        ("USD/INR",  "USDINR=X", True),
+        ("S&P 500",   "^GSPC",    False),
+        ("Dow Jones", "^DJI",     False),
+        ("Nasdaq",    "^IXIC",    False),
+        ("Crude Oil", "CL=F",     True),
+        ("Gold",      "GC=F",     True),
+        ("USD/INR",   "USDINR=X", True),
     ]
     results = []
     for label, ticker, is_commodity in items:
@@ -142,7 +144,7 @@ if _gm:
 
 st.divider()
 
-# ── Fragment 1: major index cards — refreshes every 30 s during market ─────────
+# ── Fragment 1: major index cards — refreshes every 2 min during market ────────
 _fast_interval = 120 if status["is_market_open"] else None
 
 
@@ -254,7 +256,91 @@ def _index_metrics():
 
 _index_metrics()
 
-# ── Static: YTD chart — heavy fetch done once, no need for live updates ────────
+# ── Market Intelligence Strip — derived from hist_1y + _gm (no extra fetches) ─
+def _intel_card(label: str, value: str, sub: str, color: str) -> str:
+    _rgb_map = {
+        "#00c896": "0,200,150",   "#ff4d6d": "255,77,109",
+        "#f0b429": "240,180,41",  "#f97316": "249,115,22",
+        "#94a3b8": "148,163,184",
+    }
+    rgb = _rgb_map.get(color, "148,163,184")
+    return (
+        f'<div style="background:rgba({rgb},0.06);border:1px solid rgba({rgb},0.15);'
+        f'border-top:2px solid {color};border-radius:10px;padding:10px 14px;">'
+        f'<div style="font-size:0.58rem;color:#6b7a99;font-weight:700;text-transform:uppercase;'
+        f'letter-spacing:0.08em;margin-bottom:5px;">{label}</div>'
+        f'<div style="font-size:0.92rem;font-weight:800;color:{color};">{value}</div>'
+        f'<div style="font-size:0.65rem;color:#475569;margin-top:2px;">{sub}</div>'
+        f'</div>'
+    )
+
+_cards = []
+_n50 = hist_1y.get("Nifty 50")
+_bnk = hist_1y.get("Bank Nifty")
+
+if _n50 is not None and len(_n50) >= 50:
+    _c   = float(_n50["Close"].iloc[-1])
+    _s20 = float(_n50["Close"].rolling(20).mean().iloc[-1])
+    _s50 = float(_n50["Close"].rolling(50).mean().iloc[-1])
+    _col = "#00c896" if _c > _s20 else "#ff4d6d"
+    _cards.append(_intel_card(
+        "Nifty Trend",
+        "BULLISH" if _c > _s20 else "BEARISH",
+        f"vs SMA20 {(_c-_s20)/_s20*100:+.1f}% · SMA50 {(_c-_s50)/_s50*100:+.1f}%",
+        _col,
+    ))
+    _h52  = float(_n50["Close"].max())
+    _l52  = float(_n50["Close"].min())
+    _pos  = (_c - _l52) / (_h52 - _l52) * 100 if _h52 != _l52 else 50.0
+    _pc   = "#00c896" if _pos > 65 else "#f0b429" if _pos > 40 else "#ff4d6d"
+    _cards.append(_intel_card(
+        "Nifty 52W Range", f"{_pos:.0f}% of range",
+        f"From 52W high: {(_c-_h52)/_h52*100:.1f}%", _pc,
+    ))
+    if len(_n50) >= 22:
+        _ret1m = (_c / float(_n50["Close"].iloc[-22]) - 1) * 100
+        _cards.append(_intel_card(
+            "Nifty 1M Return", f"{_ret1m:+.2f}%", "rolling 1-month return",
+            "#00c896" if _ret1m >= 0 else "#ff4d6d",
+        ))
+
+if _bnk is not None and len(_bnk) >= 20:
+    _bc   = float(_bnk["Close"].iloc[-1])
+    _bs20 = float(_bnk["Close"].rolling(20).mean().iloc[-1])
+    _bdc  = "#00c896" if _bc > _bs20 else "#ff4d6d"
+    _cards.append(_intel_card(
+        "Bank Nifty", "BULLISH" if _bc > _bs20 else "BEARISH",
+        f"vs SMA20 {(_bc-_bs20)/_bs20*100:+.1f}%", _bdc,
+    ))
+
+_sp = next((x for x in _gm if x["label"] == "S&P 500"), None)
+if _sp:
+    _cards.append(_intel_card(
+        "S&P 500 Cue", f"{_sp['chg']:+.2f}%", "yesterday's US close",
+        "#00c896" if _sp["chg"] >= 0 else "#ff4d6d",
+    ))
+
+_crude = next((x for x in _gm if x["label"] == "Crude Oil"), None)
+if _crude:
+    _crc = "#ff4d6d" if _crude["chg"] > 1 else "#00c896" if _crude["chg"] < -1 else "#f0b429"
+    _cards.append(_intel_card(
+        "Crude Oil", f"${_crude['price']:.0f}",
+        f"{_crude['chg']:+.2f}% · {'↑ cost pressure' if _crude['chg'] > 0 else '↓ relief'}",
+        _crc,
+    ))
+
+if _cards:
+    st.markdown(
+        f'<div style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;'
+        f'letter-spacing:0.08em;margin:16px 0 8px;">Market Intelligence</div>'
+        f'<div style="display:grid;grid-template-columns:repeat({len(_cards)},1fr);'
+        f'gap:10px;margin-bottom:20px;">'
+        + "".join(_cards)
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+# ── Static: YTD chart ──────────────────────────────────────────────────────────
 if hist_1y:
     st.markdown("#### Index Performance Comparison")
     try:
@@ -264,7 +350,119 @@ if hist_1y:
 
 st.divider()
 
-# ── Fragment 2: sector tiles + heatmap + breadth + movers — every 2 min ────────
+# ── Cached helpers for breadth + rotation (expensive — TTL keeps them fresh) ──
+
+@st.cache_data(ttl=3600)
+def _nifty_breadth_range_data():
+    """Batch-fetch 1Y daily for Nifty 50; compute 52W ranges, SMA%, volume ratios."""
+    tickers = list(NIFTY_50.values())
+    try:
+        raw = yf.download(
+            tickers, period="1y", interval="1d",
+            auto_adjust=True, progress=False, timeout=30, group_by="ticker",
+        )
+    except Exception:
+        return None
+    if raw is None or raw.empty:
+        return None
+
+    sma20_n = sma50_n = sma200_n = total_n = highs_52w = lows_52w = 0
+    stocks = []
+    top_lvl = raw.columns.get_level_values(0).unique().tolist() if isinstance(raw.columns, pd.MultiIndex) else []
+
+    for t in tickers:
+        try:
+            if t in top_lvl:
+                close  = raw[t]["Close"].dropna()
+                volume = raw[t]["Volume"].dropna()
+            else:
+                continue
+            if len(close) < 20:
+                continue
+            curr  = float(close.iloc[-1])
+            h52   = float(close.max())
+            l52   = float(close.min())
+            pos   = (curr - l52) / (h52 - l52) * 100 if h52 != l52 else 50.0
+            from_h = (curr - h52) / h52 * 100
+
+            sma20  = float(close.rolling(20).mean().iloc[-1])  if len(close) >= 20  else None
+            sma50  = float(close.rolling(50).mean().iloc[-1])  if len(close) >= 50  else None
+            sma200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else None
+
+            total_n += 1
+            if sma20  and curr > sma20:  sma20_n  += 1
+            if sma50  and curr > sma50:  sma50_n  += 1
+            if sma200 and curr > sma200: sma200_n += 1
+            if pos >= 90: highs_52w += 1
+            if pos <= 10: lows_52w  += 1
+
+            vol_now = float(volume.iloc[-1]) if not volume.empty else 0.0
+            vol_avg = (
+                float(volume.rolling(20).mean().iloc[-1]) if len(volume) >= 20
+                else float(volume.mean()) if not volume.empty else 1.0
+            )
+            vol_r = vol_now / vol_avg if vol_avg > 0 else 1.0
+
+            stocks.append({
+                "sym": t.replace(".NS", ""), "ticker": t,
+                "price": round(curr, 2), "h52": round(h52, 2), "l52": round(l52, 2),
+                "pos": round(pos, 1), "from_h": round(from_h, 1),
+                "vol_ratio": round(vol_r, 2),
+            })
+        except Exception:
+            continue
+
+    if not stocks:
+        return None
+    return {
+        "stocks": sorted(stocks, key=lambda x: x["pos"], reverse=True),
+        "sma_pcts": {
+            "sma20":  sma20_n  / total_n * 100 if total_n else 0.0,
+            "sma50":  sma50_n  / total_n * 100 if total_n else 0.0,
+            "sma200": sma200_n / total_n * 100 if total_n else 0.0,
+        },
+        "highs_52w": highs_52w,
+        "lows_52w":  lows_52w,
+    }
+
+
+@st.cache_data(ttl=1800)
+def _sector_rotation_data():
+    """Compute relative strength + momentum for each sector vs Nifty 50 (3M window)."""
+    _main = {"Nifty 50", "Bank Nifty", "Sensex"}
+    _sectors = {k: v for k, v in INDICES.items() if k not in _main}
+    try:
+        n_df = yf.Ticker("^NSEI").history(period="3mo", interval="1d", auto_adjust=True)
+        if n_df is None or len(n_df) < 22:
+            return []
+        n_curr  = float(n_df["Close"].iloc[-1])
+        n_1m    = (n_curr / float(n_df["Close"].iloc[-22]) - 1) * 100
+        n_3m    = (n_curr / float(n_df["Close"].iloc[0])   - 1) * 100
+        n_3m_avg = n_3m / 3
+    except Exception:
+        return []
+
+    results = []
+    for name, ticker in _sectors.items():
+        try:
+            df = yf.Ticker(ticker).history(period="3mo", interval="1d", auto_adjust=True)
+            if df is None or len(df) < 22:
+                continue
+            s_curr   = float(df["Close"].iloc[-1])
+            s_1m     = (s_curr / float(df["Close"].iloc[-22]) - 1) * 100
+            s_3m     = (s_curr / float(df["Close"].iloc[0])   - 1) * 100
+            s_3m_avg = s_3m / max(len(df) / 22, 1)
+            results.append({
+                "sector":   name,
+                "rs":       round(s_1m - n_1m, 2),
+                "momentum": round(s_1m - s_3m_avg, 2),
+            })
+        except Exception:
+            continue
+    return results
+
+
+# ── Fragment 2: sector tiles + heatmap + breadth + rotation + movers ──────────
 _slow_interval = 120 if status["is_market_open"] else None
 
 
@@ -293,8 +491,7 @@ def _market_data():
         color  = "#00c896" if chg >= 0 else "#ff4d6d"
         bg     = "rgba(0,200,150,0.07)" if chg >= 0 else "rgba(255,77,109,0.07)"
         border = "rgba(0,200,150,0.2)"  if chg >= 0 else "rgba(255,77,109,0.2)"
-        # Shorten name
-        short = name.replace("Nifty ", "").replace("Nifty", "")
+        short  = name.replace("Nifty ", "").replace("Nifty", "")
         with s_cols[i % 4]:
             st.markdown(
                 f'<div style="background:{bg};border:1px solid {border};border-radius:12px;'
@@ -314,58 +511,22 @@ def _market_data():
 
     st.divider()
 
-    # ── Fetch all Nifty 50 prices once — reuse for breadth AND movers ─────────
+    # ── Fetch Nifty 50 prices (reused for breadth AND movers) ─────────────────
     nifty_tickers = list(NIFTY_50.values())
     if _live:
         price_data = fetch_stock_data(nifty_tickers, period="2d", interval="5m", use_cache=True)
     else:
         price_data = fetch_stock_data(nifty_tickers, period="5d", interval="1d")
 
-    # ── Heatmap + Breadth ──────────────────────────────────────────────────────
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        st.subheader("Sector Heatmap")
-        try:
-            st.plotly_chart(sector_heatmap(sector_data), use_container_width=True, key="sector_heatmap")
-        except Exception:
-            pass
-
-    with c2:
-        st.subheader("Market Breadth")
-        advances = declines = 0
-        for t, df in price_data.items():
-            if df is None or df.empty:
-                continue
-            if _live:
-                df = df.dropna(subset=["Close"])
-                today    = df.index[-1].date()
-                today_df = df[df.index.date == today]
-                prev_df  = df[df.index.date < today]
-                if today_df.empty or prev_df.empty:
-                    continue
-                chg = float(today_df["Close"].iloc[-1]) - float(prev_df["Close"].iloc[-1])
-            else:
-                if len(df) < 2:
-                    continue
-                chg = float(df["Close"].iloc[-1]) - float(df["Close"].iloc[-2])
-            advances += (1 if chg > 0 else 0)
-            declines += (1 if chg < 0 else 0)
-        try:
-            st.plotly_chart(market_breadth_gauge(advances, declines), use_container_width=True, key="breadth_gauge")
-        except Exception:
-            pass
-
-    st.divider()
-
-    # ── Top Gainers / Losers ───────────────────────────────────────────────────
-    st.subheader("Top Gainers & Losers (Nifty 50)")
-    changes = []
+    # ── Compute advances / declines + changes list ─────────────────────────────
+    advances = declines = 0
+    changes  = []
     for t, df in price_data.items():
         if df is None or df.empty:
             continue
         try:
             if _live:
-                df = df.dropna(subset=["Close"])
+                df       = df.dropna(subset=["Close"])
                 today    = df.index[-1].date()
                 today_df = df[df.index.date == today]
                 prev_df  = df[df.index.date < today]
@@ -378,18 +539,75 @@ def _market_data():
                     continue
                 curr_p = float(df["Close"].iloc[-1])
                 prev_p = float(df["Close"].iloc[-2])
+            chg = curr_p - prev_p
+            advances += (1 if chg > 0 else 0)
+            declines += (1 if chg < 0 else 0)
             changes.append({"ticker": t, "price": curr_p,
                             "change_pct": (curr_p - prev_p) / prev_p * 100})
         except Exception:
             continue
 
-    g_col, l_col = st.columns(2)
-    if changes:
-        df_ch = pd.DataFrame(changes).sort_values("change_pct", ascending=False)
-        gainers = df_ch.head(5).to_dict("records")
-        losers  = df_ch.tail(5).to_dict("records")
-    else:
-        gainers, losers = [], []
+    # ── Heatmap + Breadth ──────────────────────────────────────────────────────
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        st.subheader("Sector Heatmap")
+        try:
+            st.plotly_chart(sector_heatmap(sector_data), use_container_width=True, key="sector_heatmap")
+        except Exception:
+            pass
+
+    with c2:
+        st.subheader("Market Breadth")
+        _bd = _nifty_breadth_range_data()
+        if _bd:
+            sp = _bd["sma_pcts"]
+            try:
+                st.plotly_chart(
+                    breadth_bar_chart(
+                        sp["sma20"], sp["sma50"], sp["sma200"],
+                        _bd["highs_52w"], _bd["lows_52w"],
+                    ),
+                    use_container_width=True, key="breadth_bar",
+                )
+            except Exception:
+                try:
+                    st.plotly_chart(
+                        market_breadth_gauge(advances, declines),
+                        use_container_width=True, key="breadth_gauge_fb",
+                    )
+                except Exception:
+                    pass
+        else:
+            try:
+                st.plotly_chart(
+                    market_breadth_gauge(advances, declines),
+                    use_container_width=True, key="breadth_gauge",
+                )
+            except Exception:
+                pass
+        st.caption(f"A/D: {advances} advancing · {declines} declining (today)")
+
+    st.divider()
+
+    # ── Sector Rotation Quadrant ───────────────────────────────────────────────
+    rot_data = _sector_rotation_data()
+    if rot_data:
+        st.subheader("Sector Rotation")
+        st.caption(
+            "X-axis: sector 1M return vs Nifty (positive = outperforming) · "
+            "Y-axis: 1M return vs 3M monthly avg (positive = accelerating momentum)"
+        )
+        try:
+            st.plotly_chart(
+                sector_rotation_chart(rot_data),
+                use_container_width=True, key="sector_rotation",
+            )
+        except Exception:
+            pass
+        st.divider()
+
+    # ── Top Gainers / Losers ───────────────────────────────────────────────────
+    st.subheader("Top Gainers & Losers (Nifty 50)")
 
     def _mover_row(ticker, price, chg, is_gain):
         sym   = ticker.replace(".NS", "")
@@ -407,25 +625,35 @@ def _market_data():
             f'</div>'
         )
 
+    g_col, l_col = st.columns(2)
+    if changes:
+        df_ch   = pd.DataFrame(changes).sort_values("change_pct", ascending=False)
+        gainers = df_ch.head(5).to_dict("records")
+        losers  = df_ch.tail(5).to_dict("records")
+    else:
+        gainers, losers = [], []
+
     with g_col:
         st.markdown(
             '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
-            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">'
-            '▲ Top Gainers</div>',
+            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">▲ Top Gainers</div>',
             unsafe_allow_html=True,
         )
-        rows = "".join(_mover_row(i["ticker"], i["price"], i["change_pct"], True) for i in gainers)
-        st.markdown(rows, unsafe_allow_html=True)
+        st.markdown(
+            "".join(_mover_row(i["ticker"], i["price"], i["change_pct"], True) for i in gainers),
+            unsafe_allow_html=True,
+        )
 
     with l_col:
         st.markdown(
             '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
-            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">'
-            '▼ Top Losers</div>',
+            'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">▼ Top Losers</div>',
             unsafe_allow_html=True,
         )
-        rows = "".join(_mover_row(i["ticker"], i["price"], i["change_pct"], False) for i in losers)
-        st.markdown(rows, unsafe_allow_html=True)
+        st.markdown(
+            "".join(_mover_row(i["ticker"], i["price"], i["change_pct"], False) for i in losers),
+            unsafe_allow_html=True,
+        )
 
     if _live:
         _ts = _dt.datetime.now(_IST).strftime("%H:%M:%S")
@@ -433,3 +661,79 @@ def _market_data():
 
 
 _market_data()
+
+# ── Nifty 50 — 52-Week Range Map + Volume Anomalies ──────────────────────────
+_bd_data = _nifty_breadth_range_data()
+if _bd_data and _bd_data.get("stocks"):
+    st.divider()
+    st.subheader("Nifty 50 — 52-Week Range Map")
+    st.caption(
+        "Each bar shows where the current price sits between the 52W low (left) "
+        "and 52W high (right). Sorted strongest → weakest."
+    )
+
+    stocks  = _bd_data["stocks"]
+    N_COLS  = 5
+    for row_start in range(0, len(stocks), N_COLS):
+        row_stocks = stocks[row_start: row_start + N_COLS]
+        rcols = st.columns(N_COLS)
+        for col, s in zip(rcols, row_stocks):
+            pos     = s["pos"]
+            bar_col = "#00c896" if pos > 65 else "#f0b429" if pos > 40 else "#ff4d6d"
+            with col:
+                st.markdown(
+                    f'<div style="background:rgba(255,255,255,0.02);'
+                    f'border:1px solid rgba(255,255,255,0.06);border-radius:8px;'
+                    f'padding:8px 10px;margin:2px 0;">'
+                    f'<div style="display:flex;justify-content:space-between;'
+                    f'align-items:center;margin-bottom:4px;">'
+                    f'<span style="font-size:0.75rem;font-weight:700;color:#e2e8f0;">{s["sym"]}</span>'
+                    f'<span style="font-size:0.65rem;color:{bar_col};font-weight:700;">{pos:.0f}%</span>'
+                    f'</div>'
+                    f'<div style="background:rgba(255,255,255,0.07);border-radius:3px;'
+                    f'height:5px;margin-bottom:4px;">'
+                    f'<div style="width:{pos:.0f}%;height:100%;background:{bar_col};'
+                    f'border-radius:3px;"></div></div>'
+                    f'<div style="display:flex;justify-content:space-between;">'
+                    f'<span style="font-size:0.58rem;color:#374151;">₹{s["l52"]:,.0f}</span>'
+                    f'<span style="font-size:0.58rem;color:#374151;">₹{s["h52"]:,.0f}</span>'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    # ── Volume Anomalies ───────────────────────────────────────────────────────
+    anomalies = sorted(
+        [s for s in stocks if s["vol_ratio"] >= 2.0],
+        key=lambda x: x["vol_ratio"], reverse=True,
+    )[:12]
+
+    if anomalies:
+        st.markdown(
+            '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
+            'text-transform:uppercase;letter-spacing:0.08em;margin:20px 0 6px;">'
+            '🔊 Volume Anomalies</div>'
+            '<div style="font-size:0.7rem;color:#475569;margin-bottom:10px;">'
+            'Stocks at ≥ 2× their 20-day average volume — potential breakout or breakdown</div>',
+            unsafe_allow_html=True,
+        )
+        va_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">'
+        for s in anomalies:
+            pos = s["pos"]
+            vc  = "#00c896" if pos > 65 else "#f0b429" if pos > 40 else "#ff4d6d"
+            va_html += (
+                f'<div style="background:rgba(240,180,41,0.04);'
+                f'border:1px solid rgba(240,180,41,0.12);border-left:3px solid #f0b429;'
+                f'border-radius:8px;padding:10px 12px;">'
+                f'<div style="font-size:0.82rem;font-weight:700;color:#e2e8f0;margin-bottom:4px;">'
+                f'{s["sym"]}</div>'
+                f'<div style="font-size:0.75rem;color:#f0b429;font-weight:600;">'
+                f'↑ {s["vol_ratio"]:.1f}× avg volume</div>'
+                f'<div style="font-size:0.65rem;color:{vc};margin-top:2px;">'
+                f'{pos:.0f}% of 52W range</div>'
+                f'</div>'
+            )
+        va_html += '</div>'
+        st.markdown(va_html, unsafe_allow_html=True)
+    else:
+        st.caption("No unusual volume spikes — all stocks within 2× their 20-day average.")
