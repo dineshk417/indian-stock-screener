@@ -2,8 +2,9 @@
 Page 6: Intraday Trade Ideas
 - Only active during NSE market hours (9:15–15:30 IST)
 - Opening Range Breakout, VWAP Bounce, EMA Crossover, Supertrend Signal
-- Auto-refresh every 5 minutes
+- Signals cached for 5 minutes; refresh button forces rescan
 """
+import time
 import datetime as _dt
 import streamlit as st
 import pytz as _pytz
@@ -75,7 +76,6 @@ st.markdown(
 # ── MARKET CLOSED STATE ────────────────────────────────────────────────────────
 if not status["is_market_open"] and not status["is_pre_market"]:
 
-    # Next open time
     now_ist   = _dt.datetime.now(_IST)
     next_open = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
     if now_ist >= next_open:
@@ -109,13 +109,12 @@ if not status["is_market_open"] and not status["is_pre_market"]:
         unsafe_allow_html=True,
     )
 
-    # Strategy cards grid
     strategies = [
         {
             "icon": "📊",
             "name": "Opening Range Breakout",
             "short": "ORB",
-            "color": "#10b981",
+            "color": "#f0b429",
             "desc": "Price breaks the first 15-min high/low with 1.5× volume surge",
             "tags": ["Volume", "Breakout", "15-min range"],
         },
@@ -123,7 +122,7 @@ if not status["is_market_open"] and not status["is_pre_market"]:
             "icon": "📈",
             "name": "VWAP Bounce",
             "short": "VWAP",
-            "color": "#f472b6",
+            "color": "#00c896",
             "desc": "Price bounces off VWAP support with RSI between 40–60",
             "tags": ["VWAP", "RSI confirm", "Mean reversion"],
         },
@@ -131,7 +130,7 @@ if not status["is_market_open"] and not status["is_pre_market"]:
             "icon": "⚡",
             "name": "EMA Crossover",
             "short": "EMA",
-            "color": "#60a5fa",
+            "color": "#7c83fd",
             "desc": "EMA9 crosses above EMA21 on 5-min chart with volume and VWAP confirmation",
             "tags": ["EMA9 × EMA21", "Volume", "5-min"],
         },
@@ -139,7 +138,7 @@ if not status["is_market_open"] and not status["is_pre_market"]:
             "icon": "🔄",
             "name": "Supertrend Signal",
             "short": "ST",
-            "color": "#8b5cf6",
+            "color": "#06b6d4",
             "desc": "Supertrend flips bullish on 5-min chart while price trades above VWAP",
             "tags": ["Supertrend", "VWAP", "Trend flip"],
         },
@@ -205,21 +204,36 @@ def get_fund_map(tickers):
 
 fund_map = get_fund_map(tuple(liquid_tickers))
 
-# ── GENERATE SIGNALS ───────────────────────────────────────────────────────────
-scan_banner = st.empty()
-scan_banner.markdown(
-    f'<div style="background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.18);'
-    f'border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px;'
-    f'margin-bottom:16px;">'
-    f'<div style="width:8px;height:8px;border-radius:50%;background:#00c896;'
-    f'animation:pulse 1s ease-in-out infinite;flex-shrink:0;"></div>'
-    f'<div style="color:#00c896;font-weight:700;font-size:0.85rem;">'
-    f'Live scan · {len(liquid_tickers)} stocks · 4 strategies</div>'
+# ── CACHED SIGNAL SCAN — 5-min TTL ────────────────────────────────────────────
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_intraday_scan(tickers_tuple: tuple, _fund_map: dict) -> dict:
+    """Returns {signals: list[dict], scanned_at: float}. Cached 5 min."""
+    sigs = generate_intraday_signals(list(tickers_tuple), fund_map=_fund_map)
+    return {"signals": [s.to_dict() for s in sigs], "scanned_at": time.time()}
+
+# Sidebar refresh button
+with st.sidebar:
+    st.header("Controls")
+    refresh_btn = st.button("🔄 Refresh Signals", type="primary", use_container_width=True)
+
+if refresh_btn:
+    _cached_intraday_scan.clear()
+
+with st.spinner(f"Scanning {len(liquid_tickers)} liquid stocks…"):
+    result  = _cached_intraday_scan(tuple(liquid_tickers), fund_map)
+signals     = result["signals"]
+scanned_at  = result.get("scanned_at", time.time())
+
+# ── LAST SCANNED BADGE ─────────────────────────────────────────────────────────
+_time_str = _dt.datetime.fromtimestamp(scanned_at, _IST).strftime("%H:%M IST")
+_elapsed  = int(time.time() - scanned_at)
+_from_cache = "· from cache" if _elapsed > 30 else ""
+st.markdown(
+    f'<div style="margin-bottom:6px;">'
+    f'<span style="font-size:0.68rem;color:#374151;">🕐 Scanned at {_time_str} {_from_cache}</span>'
     f'</div>',
     unsafe_allow_html=True,
 )
-signals = generate_intraday_signals(liquid_tickers, fund_map=fund_map)
-scan_banner.empty()
 
 # ── STATS STRIP ────────────────────────────────────────────────────────────────
 st.markdown(
@@ -273,23 +287,24 @@ else:
         f'Live Signals — {len(signals)} found</div>',
         unsafe_allow_html=True,
     )
-    for i, signal in enumerate(signals):
-        signal_card(signal.to_dict())
-        with st.expander(f"📊 5-min Chart · {signal.ticker.replace('.NS', '')}", expanded=False):
+    for i, sig in enumerate(signals):
+        signal_card(sig)
+        ticker = sig.get("ticker", "")
+        with st.expander(f"📊 5-min Chart · {ticker.replace('.NS', '')}", expanded=False):
             df = fetch_single_stock(
-                signal.ticker,
+                ticker,
                 period=YFINANCE_PERIOD_INTRADAY,
                 interval=YFINANCE_INTERVAL_INTRADAY,
             )
             if df is not None and not df.empty:
                 df_ind = compute_indicators(df)
                 fig    = candlestick_chart(
-                    df_ind, signal.ticker,
+                    df_ind, ticker,
                     show_sma=False, show_volume=True,
                     signal_lines={
-                        "entry":     signal.entry_price,
-                        "stop_loss": signal.stop_loss,
-                        "target_1":  signal.target_1,
+                        "entry":     sig.get("entry", 0),
+                        "stop_loss": sig.get("stop_loss", 0),
+                        "target_1":  sig.get("target_1", 0),
                     },
                 )
-                st.plotly_chart(fig, use_container_width=True, key=f"intra_candle_{i}_{signal.ticker}")
+                st.plotly_chart(fig, use_container_width=True, key=f"intra_candle_{i}_{ticker}")

@@ -1,6 +1,7 @@
 """
 Page 5: Swing Trade Recommendations (2-5 days)
 """
+import time
 import streamlit as st
 from collections import Counter
 from data.fetcher import fetch_single_stock
@@ -9,6 +10,8 @@ from analysis.technical import compute_indicators
 from analysis.sentiment import analyze_market_sentiment
 from signals.swing_signals import generate_swing_signals
 from ui.components import signal_card
+from ui.charts import candlestick_chart, rsi_macd_chart
+from config.stock_universe import NIFTY_50, NIFTY_200
 
 _STRATEGY_COLORS = {
     "Trend Pullback":         "#7c83fd",
@@ -22,8 +25,6 @@ _STRATEGY_COLORS = {
     "EMA Crossover":          "#60a5fa",
     "Supertrend Signal":      "#8b5cf6",
 }
-from ui.charts import candlestick_chart, rsi_macd_chart
-from config.stock_universe import NIFTY_50, NIFTY_200
 
 st.set_page_config(page_title="Swing Trades · ShareSaathi", layout="wide", page_icon="💹")
 from ui.styles import inject_global_css; inject_global_css()
@@ -53,7 +54,7 @@ with st.sidebar:
         "Bullish Setup", "Golden Cross", "Supertrend Reversal",
     ]
     selected_strategies = st.multiselect("Strategy", all_strategies, default=all_strategies)
-    run_btn = st.button("🔄 Generate Signals", type="primary", width="stretch")
+    run_btn = st.button("🔄 Generate Signals", type="primary", use_container_width=True)
 
     st.divider()
     with st.expander("📋 Strategy Criteria", expanded=False):
@@ -81,7 +82,22 @@ def get_sentiment_score():
     )
     return result.get("overall_sentiment", 5) / 10
 
-# ── SCAN FACTS (shown during scan) ─────────────────────────────────────────────
+try:
+    sentiment_score = get_sentiment_score()
+except Exception:
+    sentiment_score = 0.5
+
+# ── CACHED SCAN — cross-session 30-min TTL ─────────────────────────────────────
+@st.cache_data(ttl=1800, show_spinner=False)
+def _cached_swing_scan(tickers_tuple: tuple, sentiment: float) -> dict:
+    """Returns {signals: list[dict], scanned_at: float}. Cached 30 min."""
+    sigs = generate_swing_signals(list(tickers_tuple), sentiment_score=sentiment)
+    return {"signals": [s.to_dict() for s in sigs], "scanned_at": time.time()}
+
+tickers_key       = tuple(sorted(tickers))
+_universe_changed = st.session_state.get("swing_universe") != universe_choice
+
+# ── SCAN FACTS (shown during manual refresh progress bar) ─────────────────────
 _SCAN_FACTS = [
     ("📊 RSI & Momentum",      "RSI between 35–65 is the sweet spot for swing entries — not oversold, not overbought. We look for momentum without exhaustion."),
     ("📈 Trend Pullback",      "Best swing trades enter during a pullback within an uptrend. Price above SMA50 and SMA200 confirms the trend; EMA21 is our pullback target."),
@@ -91,67 +107,77 @@ _SCAN_FACTS = [
     ("⚡ Supertrend Reversal", "When Supertrend flips from bearish to bullish and MACD confirms, it often marks the start of a new swing leg — we catch it within 5 bars."),
 ]
 
-# ── SCAN ───────────────────────────────────────────────────────────────────────
-if run_btn or "swing_signals" not in st.session_state:
-    try:
-        sentiment_score = get_sentiment_score()
-    except Exception:
-        sentiment_score = 0.5
+# ── SCAN TRIGGER ───────────────────────────────────────────────────────────────
+if run_btn or "swing_signals" not in st.session_state or _universe_changed:
+    if run_btn:
+        # Manual refresh: show animated progress bar, clear cross-session cache
+        _cached_swing_scan.clear()
+        scan_slot = st.empty()
 
-    scan_slot = st.empty()
+        def _on_tick(ticker, strategies, done, total):
+            label   = ticker.replace(".NS", "")
+            pct     = max(4, done / total * 96)
+            fact    = _SCAN_FACTS[(done - 1) % len(_SCAN_FACTS)]
+            found   = f" · {len(strategies)} signal{'s' if len(strategies) != 1 else ''}" if strategies else ""
+            scan_slot.markdown(
+                f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
+                f'border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px 26px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+                f'<span style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;'
+                f'text-transform:uppercase;color:#475569;">Scanning {label}{found}</span>'
+                f'<span style="font-size:0.72rem;color:#f0b429;font-weight:700;">{done} / {total}</span>'
+                f'</div>'
+                f'<div style="background:rgba(255,255,255,0.06);border-radius:99px;'
+                f'height:4px;margin-bottom:18px;overflow:hidden;">'
+                f'<div style="width:{pct:.1f}%;height:100%;'
+                f'background:linear-gradient(90deg,#f0b429,#00c896);border-radius:99px;"></div></div>'
+                f'<div style="font-size:0.88rem;font-weight:700;color:#e2e8f0;margin-bottom:5px;">{fact[0]}</div>'
+                f'<div style="font-size:0.8rem;color:#64748b;line-height:1.6;">{fact[1]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-    def _on_tick(ticker, strategies, done, total):
-        label   = ticker.replace(".NS", "")
-        pct     = max(4, done / total * 96)
-        fact    = _SCAN_FACTS[(done - 1) % len(_SCAN_FACTS)]
-        found   = f" · {len(strategies)} signal{'s' if len(strategies) != 1 else ''}" if strategies else ""
-        scan_slot.markdown(
-            f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
-            f'border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:22px 26px;">'
-            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
-            f'<span style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;'
-            f'text-transform:uppercase;color:#475569;">Scanning {label}{found}</span>'
-            f'<span style="font-size:0.72rem;color:#f0b429;font-weight:700;">{done} / {total}</span>'
-            f'</div>'
-            f'<div style="background:rgba(255,255,255,0.06);border-radius:99px;'
-            f'height:4px;margin-bottom:18px;overflow:hidden;">'
-            f'<div style="width:{pct:.1f}%;height:100%;'
-            f'background:linear-gradient(90deg,#f0b429,#00c896);border-radius:99px;"></div></div>'
-            f'<div style="font-size:0.88rem;font-weight:700;color:#e2e8f0;margin-bottom:5px;">{fact[0]}</div>'
-            f'<div style="font-size:0.8rem;color:#64748b;line-height:1.6;">{fact[1]}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        try:
+            sigs_raw = generate_swing_signals(
+                tickers, sentiment_score=sentiment_score, on_tick=_on_tick
+            )
+            signals = [s.to_dict() for s in sigs_raw]
+        except Exception as _e:
+            st.error(f"Signal generation failed: {_e}. Please try again.")
+            signals = []
+        scan_slot.empty()
+    else:
+        # Cold session start or universe change — try cross-session cache first
+        with st.spinner(f"Scanning {len(tickers)} stocks…"):
+            result = _cached_swing_scan(tickers_key, round(sentiment_score, 2))
+        signals = result["signals"]
+        st.session_state.swing_scan_ts = result.get("scanned_at", time.time())
 
-    try:
-        signals = generate_swing_signals(tickers, sentiment_score=sentiment_score, on_tick=_on_tick)
-    except Exception as _e:
-        st.error(f"Signal generation failed: {_e}. Please try again.")
-        signals = []
+    st.session_state.swing_signals  = signals
+    st.session_state.swing_universe = universe_choice
+    if run_btn:
+        st.session_state.swing_scan_ts = time.time()
 
-    scan_slot.empty()
-    st.session_state.swing_signals        = signals
-    st.session_state.swing_sentiment_score = sentiment_score
+signals = st.session_state.get("swing_signals", [])
 
-    if signals:
-        import datetime as _dt2
-        st.markdown(
-            f'<div style="background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.2);'
-            f'border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:10px;margin-bottom:4px;">'
-            f'<span style="color:#00c896;font-size:1rem;">✓</span>'
-            f'<span style="color:#00c896;font-weight:700;font-size:0.85rem;">'
-            f'{len(signals)} signals logged to Trade Journal</span>'
-            f'<span style="color:#475569;font-size:0.75rem;margin-left:auto;">'
-            f'{_dt2.datetime.now().strftime("%H:%M:%S")}</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-signals        = st.session_state.get("swing_signals", [])
-sentiment_score = st.session_state.get("swing_sentiment_score", 0.5)
+# ── LAST SCANNED BADGE ─────────────────────────────────────────────────────────
+_ts = st.session_state.get("swing_scan_ts")
+if _ts:
+    import pytz as _tz
+    from datetime import datetime as _dt
+    _ist = _tz.timezone("Asia/Kolkata")
+    _time_str = _dt.fromtimestamp(_ts, _ist).strftime("%H:%M IST")
+    _elapsed  = int(time.time() - _ts)
+    _from_cache = "· from cache" if _elapsed > 90 else ""
+    st.markdown(
+        f'<div style="margin-bottom:6px;">'
+        f'<span style="font-size:0.68rem;color:#374151;">🕐 Scanned at {_time_str} {_from_cache}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 # ── STATS STRIP ────────────────────────────────────────────────────────────────
-strategies_active = len(set(s.strategy for s in signals))
+strategies_active = len(set(s.get("strategy", "") for s in signals))
 sentiment_label   = (
     "Very Bullish" if sentiment_score >= 0.8 else
     "Bullish"      if sentiment_score >= 0.6 else
@@ -207,7 +233,7 @@ st.markdown(
 
 # ── STRATEGY BREAKDOWN CHIPS ───────────────────────────────────────────────────
 if signals:
-    strategy_counts = Counter(s.strategy for s in signals)
+    strategy_counts = Counter(s.get("strategy", "") for s in signals)
     chips = " ".join([
         f'<span style="display:inline-flex;align-items:center;gap:5px;'
         f'background:{_STRATEGY_COLORS.get(k, "#6b7a99")}15;'
@@ -228,8 +254,8 @@ if signals:
 # ── FILTERED SIGNALS ───────────────────────────────────────────────────────────
 filtered = [
     s for s in signals
-    if s.confidence >= min_confidence
-    and (not selected_strategies or s.strategy in selected_strategies)
+    if (s.get("confidence") or 0) >= min_confidence
+    and (not selected_strategies or s.get("strategy") in selected_strategies)
 ]
 
 if not filtered:
@@ -253,37 +279,40 @@ st.markdown(
 )
 
 # ── SIGNAL CARDS ───────────────────────────────────────────────────────────────
-for i, signal in enumerate(filtered):
-    signal_card(signal.to_dict())
-    strat_color = _STRATEGY_COLORS.get(signal.strategy, "#6b7a99")
-    with st.expander(f"📊 {signal.ticker.replace('.NS','')} — Analysis & Chart", expanded=False):
-        if signal.patterns:
-            chips = " ".join([
+for i, sig in enumerate(filtered):
+    signal_card(sig)
+    strat_color = _STRATEGY_COLORS.get(sig.get("strategy", ""), "#6b7a99")
+    ticker      = sig.get("ticker", "")
+    with st.expander(f"📊 {ticker.replace('.NS', '')} — Analysis & Chart", expanded=False):
+        patterns = sig.get("patterns", [])
+        if patterns:
+            chips_html = " ".join([
                 f'<span style="display:inline-block;background:{strat_color}12;color:{strat_color};'
                 f'border:1px solid {strat_color}28;border-radius:4px;'
                 f'padding:2px 8px;font-size:0.7rem;font-weight:600;margin:2px;">{p}</span>'
-                for p in signal.patterns
+                for p in patterns
             ])
-            st.markdown(f'<div style="margin-bottom:10px;">{chips}</div>', unsafe_allow_html=True)
-        if signal.reasoning:
-            parts = [p.strip() for p in signal.reasoning.replace("Strategy:", "\nStrategy:").split(".") if len(p.strip()) > 6]
+            st.markdown(f'<div style="margin-bottom:10px;">{chips_html}</div>', unsafe_allow_html=True)
+        reasoning = sig.get("reasoning", "")
+        if reasoning:
+            parts = [p.strip() for p in reasoning.replace("Strategy:", "\nStrategy:").split(".") if len(p.strip()) > 6]
             for part in parts:
                 st.caption(f"• {part.strip()}")
-        df = fetch_single_stock(signal.ticker)
+        df = fetch_single_stock(ticker)
         if df is not None:
             df_ind = compute_indicators(df)
             fig = candlestick_chart(
-                df_ind, signal.ticker,
+                df_ind, ticker,
                 show_sma=True, show_volume=True,
                 signal_lines={
-                    "entry":     signal.entry_price,
-                    "stop_loss": signal.stop_loss,
-                    "target_1":  signal.target_1,
-                    "target_2":  signal.target_2,
+                    "entry":     sig.get("entry", 0),
+                    "stop_loss": sig.get("stop_loss", 0),
+                    "target_1":  sig.get("target_1", 0),
+                    "target_2":  sig.get("target_2", 0),
                 },
             )
-            st.plotly_chart(fig, use_container_width=True, key=f"candle_{i}_{signal.ticker}")
-            st.plotly_chart(rsi_macd_chart(df_ind), use_container_width=True, key=f"rsi_{i}_{signal.ticker}")
+            st.plotly_chart(fig, use_container_width=True, key=f"candle_{i}_{ticker}")
+            st.plotly_chart(rsi_macd_chart(df_ind), use_container_width=True, key=f"rsi_{i}_{ticker}")
 
 st.divider()
 st.caption(
