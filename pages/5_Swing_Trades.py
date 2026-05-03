@@ -274,26 +274,136 @@ st.markdown(
 # ── SIGNAL CARDS ───────────────────────────────────────────────────────────────
 for i, sig in enumerate(filtered):
     signal_card(sig)
-    strat_color = _STRATEGY_COLORS.get(sig.get("strategy", ""), "#6b7a99")
-    ticker      = sig.get("ticker", "")
-    with st.expander(f"📊 {ticker.replace('.NS', '')} — Analysis & Chart", expanded=False):
+    strat_color  = _STRATEGY_COLORS.get(sig.get("strategy", ""), "#6b7a99")
+    ticker       = sig.get("ticker", "")
+    ticker_short = ticker.replace(".NS", "")
+    tech_score   = float(sig.get("technical_score", 0.5) or 0.5)
+    fund_score   = float(sig.get("fundamental_score", 0.5) or 0.5)
+
+    with st.expander(f"📊 {ticker_short} — Analysis & Chart", expanded=False):
+
+        # ── Score bars ───────────────────────────────────────────────────────
+        st.markdown(
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'
+
+            f'<div style="background:rgba(124,131,253,0.05);border:1px solid rgba(124,131,253,0.15);'
+            f'border-radius:10px;padding:12px 14px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">'
+            f'<span style="font-size:0.65rem;font-weight:700;color:#64748b;'
+            f'text-transform:uppercase;letter-spacing:0.09em;">Technical</span>'
+            f'<span style="font-size:0.78rem;font-weight:700;color:#a5b4fc;">'
+            f'{tech_score * 10:.1f}<span style="color:#475569;font-size:0.65rem;">/10</span></span>'
+            f'</div>'
+            f'<div style="background:rgba(255,255,255,0.06);border-radius:3px;height:4px;overflow:hidden;">'
+            f'<div style="width:{tech_score*100:.0f}%;height:100%;'
+            f'background:linear-gradient(90deg,#7c83fd,#a5b4fc);border-radius:3px;"></div></div>'
+            f'</div>'
+
+            f'<div style="background:rgba(0,200,150,0.05);border:1px solid rgba(0,200,150,0.15);'
+            f'border-radius:10px;padding:12px 14px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">'
+            f'<span style="font-size:0.65rem;font-weight:700;color:#64748b;'
+            f'text-transform:uppercase;letter-spacing:0.09em;">Fundamental</span>'
+            f'<span style="font-size:0.78rem;font-weight:700;color:#00c896;">'
+            f'{fund_score * 10:.1f}<span style="color:#475569;font-size:0.65rem;">/10</span></span>'
+            f'</div>'
+            f'<div style="background:rgba(255,255,255,0.06);border-radius:3px;height:4px;overflow:hidden;">'
+            f'<div style="width:{fund_score*100:.0f}%;height:100%;'
+            f'background:linear-gradient(90deg,#00c896,#34d399);border-radius:3px;"></div></div>'
+            f'</div>'
+
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Pattern chips ─────────────────────────────────────────────────────
         patterns = sig.get("patterns", [])
         if patterns:
             chips_html = " ".join([
-                f'<span style="display:inline-block;background:{strat_color}12;color:{strat_color};'
-                f'border:1px solid {strat_color}28;border-radius:4px;'
-                f'padding:2px 8px;font-size:0.7rem;font-weight:600;margin:2px;">{p}</span>'
+                f'<span style="display:inline-block;background:{strat_color}10;color:{strat_color};'
+                f'border:1px solid {strat_color}25;border-radius:5px;'
+                f'padding:2px 9px;font-size:0.68rem;font-weight:600;margin:2px;">{p}</span>'
                 for p in patterns
             ])
-            st.markdown(f'<div style="margin-bottom:10px;">{chips_html}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="margin-bottom:12px;line-height:1.9;">{chips_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+        # ── Analysis bullets ──────────────────────────────────────────────────
         reasoning = sig.get("reasoning", "")
         if reasoning:
-            parts = [p.strip() for p in reasoning.replace("Strategy:", "\nStrategy:").split(".") if len(p.strip()) > 6]
-            for part in parts:
-                st.caption(f"• {part.strip()}")
+            parts = [
+                p.strip() for p in
+                reasoning.replace("Strategy:", "\nStrategy:").split(".")
+                if len(p.strip()) > 8
+            ]
+            bullets_html = "".join([
+                f'<div style="display:flex;align-items:flex-start;gap:9px;'
+                f'padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+                f'<span style="color:{strat_color};font-size:0.7rem;margin-top:2px;'
+                f'flex-shrink:0;">◆</span>'
+                f'<span style="color:#94a3b8;font-size:0.81rem;line-height:1.55;">'
+                f'{p}</span>'
+                f'</div>'
+                for p in parts[:5]
+            ])
+            st.markdown(
+                f'<div style="margin-bottom:14px;">{bullets_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+        # ── Live indicator mini-grid + charts ─────────────────────────────────
         df = fetch_single_stock(ticker)
         if df is not None:
-            df_ind = compute_indicators(df)
+            df_ind   = compute_indicators(df)
+            latest   = df_ind.iloc[-1]
+
+            def _f(v):
+                try: return float(v) if v == v else None
+                except: return None
+
+            rsi       = _f(latest.get("RSI_14"))
+            vol_ratio = _f(latest.get("Volume_ratio"))
+
+            sma50  = _f(latest.get("SMA_50"))
+            sma200 = _f(latest.get("SMA_200"))
+            close  = _f(latest.get("Close"))
+
+            trend_lbl  = "Uptrend" if (close and sma50 and sma200 and close > sma50 > sma200) \
+                         else "Mixed" if (close and sma50 and close > sma50) \
+                         else "Downtrend" if close else "—"
+            trend_col  = "#00c896" if trend_lbl == "Uptrend" else "#f0b429" if trend_lbl == "Mixed" else "#ff4d6d"
+
+            rsi_lbl = f"{rsi:.0f}" if rsi is not None else "—"
+            rsi_col = "#00c896" if rsi and rsi < 60 else "#f0b429" if rsi and rsi < 70 else "#ff4d6d" if rsi else "#64748b"
+
+            vol_lbl = f"{vol_ratio}×" if vol_ratio else "—"
+            vol_col = "#00c896" if vol_ratio and vol_ratio >= 1.5 else "#f0b429" if vol_ratio else "#64748b"
+
+            st.markdown(
+                f'<div style="display:grid;grid-template-columns:repeat(4,1fr);'
+                f'gap:6px;margin-bottom:14px;">'
+
+                + "".join([
+                    f'<div style="background:rgba(255,255,255,0.03);'
+                    f'border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:9px 10px;">'
+                    f'<div style="font-size:0.6rem;font-weight:700;color:#475569;'
+                    f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">{lbl}</div>'
+                    f'<div style="font-size:0.88rem;font-weight:700;color:{col};">{val}</div>'
+                    f'</div>'
+                    for lbl, val, col in [
+                        ("RSI",    rsi_lbl,  rsi_col),
+                        ("Volume", vol_lbl,  vol_col),
+                        ("Trend",  trend_lbl, trend_col),
+                        ("Score",  f"{round((tech_score + fund_score) / 2 * 10, 1)}/10", strat_color),
+                    ]
+                ])
+
+                + f'</div>',
+                unsafe_allow_html=True,
+            )
+
             fig = candlestick_chart(
                 df_ind, ticker,
                 show_sma=True, show_volume=True,
