@@ -271,10 +271,10 @@ if _top3:
         # Score bar segments (widths proportional to max possible per factor)
         _factors = [
             ("Conf",   _bd.get("Confidence",   0), 25, "#7c83fd"),
-            ("Tech",   _bd.get("Technical",    0), 20, "#60a5fa"),
-            ("Fund",   _bd.get("Fundamental",  0), 15, "#34d399"),
-            ("R:R",    _bd.get("Risk/Reward",  0), 20, "#f97316"),
-            ("Entry",  _bd.get("Entry Timing", 0), 20, "#f0b429"),
+            ("Tech",   _bd.get("Technical",    0), 20, "#a5b4fc"),
+            ("Fund",   _bd.get("Fundamental",  0), 15, "#00c896"),
+            ("R:R",    _bd.get("Risk/Reward",  0), 20, "#f0b429"),
+            ("Entry",  _bd.get("Entry Timing", 0), 20, "#34d399"),
         ]
         bar_segs = "".join([
             f'<div title="{fn}: {fv:.0f}/{fm}" style="height:4px;width:{fv/100*100:.0f}%;'

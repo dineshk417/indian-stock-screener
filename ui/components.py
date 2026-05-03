@@ -4,18 +4,22 @@ Reusable Streamlit UI components.
 import streamlit as st
 from ui.formatters import format_inr, format_pct, color_for_change, confidence_stars
 
-# Per-strategy accent colours — used for the strategy badge
+# Per-strategy accent colours mapped to the 4-colour design palette:
+#   #f0b429 gold   — breakout / premium momentum signals
+#   #00c896 green  — reversal / bullish continuation
+#   #7c83fd indigo — trend / mean-reversion / crossover
+#   #ff4d6d red    — short / bearish (reserved for SHORT direction)
 _STRATEGY_COLORS = {
     "Trend Pullback":         "#7c83fd",
     "Volume Breakout":        "#f0b429",
-    "Oversold Reversal":      "#a855f7",
+    "Oversold Reversal":      "#00c896",
     "Bullish Setup":          "#00c896",
-    "Golden Cross":           "#fbbf24",
-    "Supertrend Reversal":    "#06b6d4",
-    "Opening Range Breakout": "#10b981",
-    "VWAP Bounce":            "#f472b6",
-    "EMA Crossover":          "#60a5fa",
-    "Supertrend Signal":      "#8b5cf6",
+    "Golden Cross":           "#f0b429",
+    "Supertrend Reversal":    "#00c896",
+    "Opening Range Breakout": "#f0b429",
+    "VWAP Bounce":            "#7c83fd",
+    "EMA Crossover":          "#7c83fd",
+    "Supertrend Signal":      "#00c896",
 }
 
 

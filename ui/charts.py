@@ -294,7 +294,7 @@ def sector_rotation_chart(rotation_data: list[dict]) -> go.Figure:
     def _color(rs, mom):
         if rs >= 0 and mom >= 0: return "#00c896"
         if rs <  0 and mom >= 0: return "#f0b429"
-        if rs >= 0 and mom <  0: return "#f97316"
+        if rs >= 0 and mom <  0: return "#7c83fd"
         return "#ff4d6d"
 
     def _qlabel(rs, mom):
@@ -328,7 +328,7 @@ def sector_rotation_chart(rotation_data: list[dict]) -> go.Figure:
     for label, x, y, color in [
         ("LEADING",   xr * 0.78,  yr * 0.88,  "#00c896"),
         ("IMPROVING", -xr * 0.78, yr * 0.88,  "#f0b429"),
-        ("WEAKENING", xr * 0.78,  -yr * 0.88, "#f97316"),
+        ("WEAKENING", xr * 0.78,  -yr * 0.88, "#7c83fd"),
         ("LAGGING",   -xr * 0.78, -yr * 0.88, "#ff4d6d"),
     ]:
         fig.add_annotation(x=x, y=y, text=label, showarrow=False,
@@ -382,7 +382,7 @@ def breadth_bar_chart(sma20: float, sma50: float, sma200: float,
 
     labels = ["SMA 200", "SMA 50", "SMA 20"]
     values = [sma200, sma50, sma20]
-    colors = ["#8b5cf6", "#f0b429", "#60a5fa"]
+    colors = ["#7c83fd", "#f0b429", "#00c896"]
 
     fig.add_trace(go.Bar(
         y=labels, x=values, orientation="h",
