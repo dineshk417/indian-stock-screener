@@ -12,7 +12,7 @@ import pytz as _pytz
 from data.fetcher import fetch_bulk_fundamentals, fetch_stock_data, fetch_single_stock
 from data.market_status import market_status, is_market_open
 from signals.intraday_signals import generate_intraday_signals
-from ui.components import signal_card
+from ui.components import signal_card, page_header
 from ui.charts import candlestick_chart
 from analysis.technical import compute_indicators
 from config.stock_universe import NIFTY_50
@@ -28,14 +28,8 @@ st.set_page_config(page_title="Intraday Ideas · ShareSaathi", layout="wide", pa
 from ui.styles import inject_global_css; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div style="margin-bottom:4px;">'
-    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Equity · Intraday</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-st.title("⚡ Intraday Trade Ideas")
+page_header("⚡ Intraday Trade Ideas", subtitle="NSE · Equity · Intraday",
+            badge="LIVE", badge_color="#00c896")
 
 status = market_status()
 

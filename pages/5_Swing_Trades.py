@@ -9,7 +9,7 @@ from data.news_fetcher import fetch_market_news, format_news_for_claude
 from analysis.technical import compute_indicators
 from analysis.sentiment import analyze_market_sentiment
 from signals.swing_signals import generate_swing_signals
-from ui.components import signal_card
+from ui.components import signal_card, page_header
 from ui.charts import candlestick_chart, rsi_macd_chart
 from config.stock_universe import NIFTY_50, NIFTY_200
 
@@ -30,14 +30,7 @@ st.set_page_config(page_title="Swing Trades · ShareSaathi", layout="wide", page
 from ui.styles import inject_global_css; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div style="margin-bottom:4px;">'
-    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Equity · 2–5 Day Hold</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-st.title("💹 Swing Trade Ideas")
+page_header("💹 Swing Trade Ideas", subtitle="NSE · Equity · 2–5 Day Hold")
 
 # ── SIDEBAR ────────────────────────────────────────────────────────────────────
 with st.sidebar:

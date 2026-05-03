@@ -7,16 +7,10 @@ from analysis.sentiment import analyze_market_sentiment, has_api_key, get_engine
 
 st.set_page_config(page_title="News & Sentiment · ShareSaathi", layout="wide", page_icon="📰")
 from ui.styles import inject_global_css; inject_global_css()
+from ui.components import page_header
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div style="margin-bottom:4px;">'
-    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">AI · Market Intelligence · Daily</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-st.title("📰 News & Market Sentiment")
+page_header("📰 News & Market Sentiment", subtitle="AI · Market Intelligence · Daily")
 
 # ── FETCH ──────────────────────────────────────────────────────────────────────
 fetch_banner = st.empty()

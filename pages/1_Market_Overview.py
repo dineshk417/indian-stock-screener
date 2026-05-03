@@ -34,15 +34,9 @@ def _live_quote(ticker: str) -> dict:
 # ── Page shell ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Market Overview · ShareSaathi", layout="wide", page_icon="📊")
 from ui.styles import inject_global_css; inject_global_css()
+from ui.components import page_header
 
-st.markdown(
-    '<div style="margin-bottom:4px;">'
-    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">NSE · BSE · Live</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-st.title("📊 Market Overview")
+page_header("📊 Market Overview", subtitle="NSE · BSE · Live", badge="LIVE", badge_color="#00c896")
 
 status     = market_status()
 is_holiday = not status["is_trading_day"]

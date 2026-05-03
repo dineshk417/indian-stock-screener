@@ -27,6 +27,7 @@ except Exception as _exc:
 
 st.set_page_config(page_title="Signal Log · ShareSaathi", layout="wide", page_icon="📋")
 from ui.styles import inject_global_css; inject_global_css()
+from ui.components import page_header
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 @st.cache_data(ttl=600)
@@ -197,19 +198,11 @@ _dot_col  = "#00c896" if _mkt_live else "#f0b429"
 _dot_rgb  = "0,200,150" if _mkt_live else "240,180,41"
 _pulse    = "animation:pulse 1.4s ease-in-out infinite;" if _mkt_live else ""
 
-st.markdown(
-    '<div style="margin-bottom:4px;">'
-    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Trade Journal · Forward Test</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
 hcol1, hcol2 = st.columns([3, 1])
 with hcol1:
-    st.title("📋 Signal Log")
+    page_header("📋 Signal Log", subtitle="NSE · Trade Journal · Forward Test")
 with hcol2:
-    st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:38px'></div>", unsafe_allow_html=True)
     _run_scan = st.button("▶ Run Scan Now", type="primary", use_container_width=True)
 
 # ── Run Scan ───────────────────────────────────────────────────────────────────

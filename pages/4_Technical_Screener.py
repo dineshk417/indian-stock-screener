@@ -10,16 +10,10 @@ from config.settings import RSI_PERIOD
 
 st.set_page_config(page_title="Technical Screener · ShareSaathi", layout="wide", page_icon="📈")
 from ui.styles import inject_global_css; inject_global_css()
+from ui.components import page_header
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div style="margin-bottom:4px;">'
-    '<span style="font-size:0.72rem;font-weight:700;color:#64748b;'
-    'text-transform:uppercase;letter-spacing:0.1em;">NSE · Equity · Technical Analysis</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-st.title("📈 Technical Screener")
+page_header("📈 Technical Screener", subtitle="NSE · Equity · Technical Analysis")
 
 # ── SIDEBAR ────────────────────────────────────────────────────────────────────
 with st.sidebar:

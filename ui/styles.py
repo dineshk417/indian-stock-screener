@@ -315,8 +315,62 @@ a[data-testid="stPageLink-NavLink"]:hover {
     to   { opacity: 1; transform: translateX(0); }
 }
 
-/* ── Spinner ──────────────────────────────────────────────────────────────── */
-[data-testid="stSpinner"] { color: #f0b429 !important; }
+/* ── Branded spinner ──────────────────────────────────────────────────────── */
+/* Gold ring with subtle glow — replaces default grey spinner */
+[data-testid="stSpinner"] > div { text-align: center; }
+[data-testid="stSpinner"] svg circle {
+    stroke: rgba(240,180,41,0.18) !important;
+}
+[data-testid="stSpinner"] svg path,
+[data-testid="stSpinner"] svg circle + circle {
+    stroke: #f0b429 !important;
+    filter: drop-shadow(0 0 5px rgba(240,180,41,0.45));
+}
+[data-testid="stSpinner"] p,
+[data-testid="stSpinner"] span {
+    color: #64748b !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.03em !important;
+}
+
+/* ── Top-bar loading indicator (page reruns) ──────────────────────────────── */
+[data-testid="stStatusWidget"] svg { display: none !important; }
+[data-testid="stStatusWidget"] {
+    background: transparent !important;
+    border: none !important;
+}
+[data-testid="stStatusWidget"]::before {
+    content: '';
+    display: block;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #f0b429, #00c896, #7c83fd, #f0b429);
+    background-size: 300% 100%;
+    animation: ss-topbar 1.8s linear infinite;
+    z-index: 9999;
+}
+@keyframes ss-topbar {
+    0%   { background-position: 100% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── Skeleton shimmer (opt-in utility class) ──────────────────────────────── */
+.ss-skeleton {
+    background: linear-gradient(90deg,
+        rgba(255,255,255,0.04) 25%,
+        rgba(255,255,255,0.09) 50%,
+        rgba(255,255,255,0.04) 75%
+    );
+    background-size: 200% 100%;
+    animation: ss-shimmer 1.6s ease-in-out infinite;
+    border-radius: 10px;
+}
+@keyframes ss-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
 </style>
 """
 
