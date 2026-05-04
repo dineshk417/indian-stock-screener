@@ -33,8 +33,7 @@ def _live_quote(ticker: str) -> dict:
 
 # ── Page shell ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Market Overview · ShareSaathi", layout="wide", page_icon="📊")
-from ui.styles import inject_global_css; inject_global_css()
-from ui.components import page_header
+from ui.styles import inject_global_css, page_header; inject_global_css()
 
 page_header("📊 Market Overview", subtitle="NSE · BSE · Live", badge="LIVE", badge_color="#00c896")
 

@@ -26,8 +26,7 @@ except Exception as _exc:
     _import_error = _tb.format_exc()
 
 st.set_page_config(page_title="Signal Log · ShareSaathi", layout="wide", page_icon="📋")
-from ui.styles import inject_global_css; inject_global_css()
-from ui.components import page_header
+from ui.styles import inject_global_css, page_header; inject_global_css()
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 @st.cache_data(ttl=600)

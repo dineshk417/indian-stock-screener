@@ -9,8 +9,7 @@ from config.stock_universe import NIFTY_50, NIFTY_200
 from config.settings import RSI_PERIOD
 
 st.set_page_config(page_title="Technical Screener · ShareSaathi", layout="wide", page_icon="📈")
-from ui.styles import inject_global_css; inject_global_css()
-from ui.components import page_header
+from ui.styles import inject_global_css, page_header; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
 page_header("📈 Technical Screener", subtitle="NSE · Equity · Technical Analysis")

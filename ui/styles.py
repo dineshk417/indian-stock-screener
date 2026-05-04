@@ -378,3 +378,38 @@ a[data-testid="stPageLink-NavLink"]:hover {
 def inject_global_css() -> None:
     """Inject shared CSS. Call once, right after set_page_config."""
     st.markdown(_CSS, unsafe_allow_html=True)
+
+
+def page_header(
+    title: str,
+    subtitle: str = "",
+    badge: str = "",
+    badge_color: str = "#f0b429",
+) -> None:
+    """Consistent page header: eyebrow subtitle + title + gradient divider."""
+    badge_html = (
+        f'<span style="display:inline-block;background:{badge_color}18;'
+        f'color:{badge_color};border:1px solid {badge_color}35;'
+        f'border-radius:20px;padding:2px 10px;font-size:0.65rem;'
+        f'font-weight:700;letter-spacing:0.08em;vertical-align:middle;'
+        f'margin-left:10px;">{badge}</span>'
+        if badge else ""
+    )
+    sub_html = (
+        f'<div style="font-size:0.68rem;font-weight:700;color:#475569;'
+        f'text-transform:uppercase;letter-spacing:0.11em;margin-bottom:5px;">'
+        f'{subtitle}</div>'
+        if subtitle else ""
+    )
+    st.markdown(
+        f'{sub_html}'
+        f'<div style="display:flex;align-items:center;margin-bottom:18px;">'
+        f'<span style="font-size:1.7rem;font-weight:800;color:#f1f5f9;'
+        f'letter-spacing:-0.03em;line-height:1.15;">{title}</span>'
+        f'{badge_html}'
+        f'</div>'
+        f'<div style="height:1px;background:linear-gradient(90deg,'
+        f'rgba(240,180,41,0.35),rgba(0,200,150,0.2),transparent);'
+        f'margin-bottom:22px;border-radius:1px;"></div>',
+        unsafe_allow_html=True,
+    )

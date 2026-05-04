@@ -9,8 +9,7 @@ from analysis.screener import StockScreener, PRESETS, build_screen_data
 from config.stock_universe import NIFTY_50, NIFTY_200, get_all_sectors, SECTOR_MAP
 
 st.set_page_config(page_title="Fundamental Screener · ShareSaathi", layout="wide", page_icon="🔍")
-from ui.styles import inject_global_css; inject_global_css()
-from ui.components import page_header
+from ui.styles import inject_global_css, page_header; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
 page_header("🔍 Fundamental Screener", subtitle="NSE · Equity · Fundamentals")
