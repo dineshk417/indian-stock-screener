@@ -411,8 +411,13 @@ with tab_live:
                 else:
                     st.error("Dedup failed — check logs.")
 
-    # Filter open signals by sidebar timeframe
-    _open_filtered = [s for s in _open_all if timeframe is None or s["timeframe"] == timeframe]
+    # Filter open signals by sidebar timeframe AND period
+    _cutoff_date = (_dt.date.today() - _dt.timedelta(days=days_back)).isoformat()
+    _open_filtered = [
+        s for s in _open_all
+        if (timeframe is None or s["timeframe"] == timeframe)
+        and (days_back >= 365 or s["signal_date"] >= _cutoff_date)
+    ]
 
     if not _open_filtered:
         st.markdown(
@@ -483,7 +488,7 @@ with tab_live:
                         elif curr_price >= t2:                                  status_l, status_c = "T2 HIT",     "#00c896"
                         elif curr_price >= t1:                                  status_l, status_c = "T1 HIT",     "#5AD8A6"
                         elif (entry - curr_price) / abs(entry - stop) > 0.6:   status_l, status_c = "NEAR SL",    "#f0b429"
-                        elif days_held >= 3 and abs((curr_price - entry) / entry * 100) < 0.4:
+                        elif days_held >= 3 and abs((curr_price - entry) / entry * 100) < 1.5:
                                                                                 status_l, status_c = "STALE",      "#64748b"
                         else:                                                   status_l, status_c = "ACTIVE",     "#7c83fd"
                     else:
@@ -491,7 +496,7 @@ with tab_live:
                         elif curr_price <= t2:                                  status_l, status_c = "T2 HIT",     "#00c896"
                         elif curr_price <= t1:                                  status_l, status_c = "T1 HIT",     "#5AD8A6"
                         elif (curr_price - entry) / abs(stop - entry) > 0.6:   status_l, status_c = "NEAR SL",    "#f0b429"
-                        elif days_held >= 3 and abs((entry - curr_price) / entry * 100) < 0.4:
+                        elif days_held >= 3 and abs((entry - curr_price) / entry * 100) < 1.5:
                                                                                 status_l, status_c = "STALE",      "#64748b"
                         else:                                                   status_l, status_c = "ACTIVE",     "#7c83fd"
 
@@ -532,7 +537,7 @@ with tab_live:
                         f'<span style="font-size:1.05rem;font-weight:800;color:#e2e8f0;">{label}</span>'
                         f'<span style="background:{dir_col}22;color:{dir_col};border:1px solid {dir_col}44;'
                         f'border-radius:5px;padding:2px 8px;font-size:0.7rem;font-weight:700;">{dir_arr}</span>'
-                        f'<span style="color:#475569;font-size:0.72rem;">{sig.get("strategy","")} · {sig.get("timeframe","")}</span>'
+                        f'<span style="color:#475569;font-size:0.72rem;">{sig.get("strategy","")} · {sig.get("timeframe","")} · held {days_str}</span>'
                         f'</div>'
                         f'<span style="background:{status_c}22;color:{status_c};border:1px solid {status_c}44;'
                         f'border-radius:6px;padding:3px 12px;font-size:0.78rem;font-weight:700;">{status_l}</span>'
@@ -648,10 +653,10 @@ with tab_perf:
 
     avg_pnl = perf.get("avg_net_pnl_inr")
 
-    # Portfolio return on ₹1L base capital
-    _BASE_CAPITAL    = 100_000  # ₹1,00,000 — fixed portfolio base
+    # Portfolio return relative to per-trade position size
+    _BASE_CAPITAL    = float(position_size)
     _portfolio_pnl   = net_pnl if net_pnl is not None else 0.0
-    _portfolio_ret   = _portfolio_pnl / _BASE_CAPITAL * 100
+    _portfolio_ret   = _portfolio_pnl / _BASE_CAPITAL * 100 if _BASE_CAPITAL else 0.0
     _port_col        = "#00c896" if _portfolio_pnl >= 0 else "#ff4d6d"
     _port_val_str    = f"₹{_BASE_CAPITAL + _portfolio_pnl:,.0f}"
     _port_ret_str    = f"{_portfolio_ret:+.1f}%"
@@ -683,7 +688,7 @@ with tab_perf:
         f'<div style="color:{_port_col};font-size:1.6rem;font-weight:800;">{_port_val_str}</div>'
         f'<div style="color:#475569;font-size:0.72rem;margin-top:3px;">'
         f'<span style="color:{_port_col};font-weight:700;">{_port_ret_str}</span>'
-        f' on ₹1,00,000 base · {perf["total"]} signals</div>'
+        f' on ₹{int(position_size):,}/trade · {perf["total"]} signals</div>'
         f'</div>'
 
         f'</div>'
@@ -702,14 +707,14 @@ with tab_perf:
             f'{_expired_n} expired signal(s) in this period are excluded from all P&L metrics. '
             f'A high expired count usually reflects historical duplicate OPEN signals that were '
             f'cleaned up — it does not affect win rate or net P&L, which only count resolved trades. '
-            f'Portfolio return assumes a fixed ₹{int(position_size):,} position per trade.'
+            f'Portfolio return shown as % of a single ₹{int(position_size):,} position.'
             f'</div>',
             unsafe_allow_html=True,
         )
     elif total_closed > 0:
         st.markdown(
             f'<div style="font-size:0.67rem;color:#374151;margin-bottom:10px;">'
-            f'Portfolio return assumes a fixed ₹{int(position_size):,} position per trade · '
+            f'Portfolio return shown as % of ₹{int(position_size):,} position size · '
             f'P&L excludes {_expired_n} expired signal(s)</div>',
             unsafe_allow_html=True,
         )
@@ -850,9 +855,25 @@ with tab_hist:
     if not signals:
         st.caption("No signals in the selected period. Change the Period filter or run a scan.")
     else:
-        # Build table (all signals, open + closed)
+        # Open/Closed filter
+        _hist_n_open   = sum(1 for s in signals if s["outcome"] == OUTCOME_OPEN)
+        _hist_n_closed = sum(1 for s in signals if s["outcome"] != OUTCOME_OPEN)
+        _hist_view = st.radio(
+            "Show",
+            [f"All ({len(signals)})", f"Open ({_hist_n_open})", f"Closed ({_hist_n_closed})"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        if "Open" in _hist_view and "All" not in _hist_view:
+            _hist_signals = [s for s in signals if s["outcome"] == OUTCOME_OPEN]
+        elif "Closed" in _hist_view:
+            _hist_signals = [s for s in signals if s["outcome"] != OUTCOME_OPEN]
+        else:
+            _hist_signals = signals
+
+        # Build table
         rows = []
-        for s in sorted(signals, key=lambda x: (x["signal_date"], x.get("logged_at", "")), reverse=True):
+        for s in sorted(_hist_signals, key=lambda x: (x["signal_date"], x.get("logged_at", "")), reverse=True):
             _outcome_lbl = OUTCOME_LABELS.get(s["outcome"], s["outcome"])
             _risk_pct    = (abs(s["entry_price"] - s["stop_loss"]) / s["entry_price"] * 100
                             if s.get("entry_price") and s.get("stop_loss") else None)
@@ -876,6 +897,15 @@ with tab_hist:
 
         df_j = pd.DataFrame(rows)
 
+        _OUTCOME_STYLE = {
+            "Target 2 Hit": "color:#00C896;font-weight:700",
+            "Target 1 Hit": "color:#5AD8A6;font-weight:700",
+            "Stopped Out":  "color:#ff4d6d;font-weight:700",
+            "Squared Off":  "color:#f0b429;font-weight:600",
+            "Expired":      "color:#6b7a99",
+            "Open":         "color:#7c83fd;font-weight:700",
+        }
+
         def _pnl_style(v):
             if v is None or v == "": return ""
             try:
@@ -884,9 +914,13 @@ with tab_hist:
             except (TypeError, ValueError):
                 return ""
 
+        def _outcome_style(v):
+            return _OUTCOME_STYLE.get(str(v), "")
+
         styled = (
             df_j.style
             .map(_pnl_style, subset=["R", "Net P&L ₹"])
+            .map(_outcome_style, subset=["Outcome"])
             .format({
                 "Entry ₹":   lambda v: f"₹{v:,.2f}" if v else "",
                 "SL ₹":      lambda v: f"₹{v:,.2f}" if v else "",
@@ -969,8 +1003,8 @@ with tab_insights:
         unsafe_allow_html=True,
     )
 
-    # Build per-strategy win rates from signal log
-    _all_sigs   = log.get_signals(days_back=90)
+    # Build per-strategy win rates from signal log — respects sidebar filters
+    _all_sigs   = log.get_signals(timeframe=timeframe, days_back=days_back)
     _closed_90  = [s for s in _all_sigs if s["outcome"] not in (OUTCOME_OPEN, OUTCOME_EXPIRED)]
     _strat_stats: dict = {}
     for s in _closed_90:
@@ -978,7 +1012,10 @@ with tab_insights:
         if st_ not in _strat_stats:
             _strat_stats[st_] = {"wins": 0, "total": 0}
         _strat_stats[st_]["total"] += 1
-        if s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2):
+        _is_win = s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2) or (
+            s["outcome"] == OUTCOME_SQUARED_OFF and (s.get("net_pnl_inr") or 0) > 0
+        )
+        if _is_win:
             _strat_stats[st_]["wins"] += 1
 
     _matcher_rows = []
@@ -1039,7 +1076,7 @@ with tab_insights:
         unsafe_allow_html=True,
     )
 
-    _all_90  = log.get_signals(days_back=90)
+    _all_90  = log.get_signals(timeframe=timeframe, days_back=days_back)
     _closed  = [s for s in _all_90 if s["outcome"] not in (OUTCOME_OPEN, OUTCOME_EXPIRED)]
 
     if len(_all_90) < 5:
@@ -1054,8 +1091,18 @@ with tab_insights:
         # LONG vs SHORT
         _long_all   = [s for s in _all_90 if s["direction"] == "LONG"]
         _short_all  = [s for s in _all_90 if s["direction"] == "SHORT"]
-        _long_wins  = sum(1 for s in _closed if s["direction"] == "LONG"  and s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2))
-        _short_wins = sum(1 for s in _closed if s["direction"] == "SHORT" and s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2))
+        _long_wins  = sum(
+            1 for s in _closed
+            if s["direction"] == "LONG"
+            and (s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2)
+                 or (s["outcome"] == OUTCOME_SQUARED_OFF and (s.get("net_pnl_inr") or 0) > 0))
+        )
+        _short_wins = sum(
+            1 for s in _closed
+            if s["direction"] == "SHORT"
+            and (s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2)
+                 or (s["outcome"] == OUTCOME_SQUARED_OFF and (s.get("net_pnl_inr") or 0) > 0))
+        )
         _long_cl    = sum(1 for s in _closed if s["direction"] == "LONG")
         _short_cl   = sum(1 for s in _closed if s["direction"] == "SHORT")
         _lwr = round(_long_wins  / _long_cl  * 100) if _long_cl  > 0 else None
@@ -1086,7 +1133,10 @@ with tab_insights:
             if st_ not in _st_wr:
                 _st_wr[st_] = {"w": 0, "n": 0}
             _st_wr[st_]["n"] += 1
-            if s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2):
+            _is_w = s["outcome"] in (OUTCOME_TARGET1, OUTCOME_TARGET2) or (
+                s["outcome"] == OUTCOME_SQUARED_OFF and (s.get("net_pnl_inr") or 0) > 0
+            )
+            if _is_w:
                 _st_wr[st_]["w"] += 1
         _st_ranked = sorted(
             [(k, round(v["w"] / v["n"] * 100), v["n"]) for k, v in _st_wr.items() if v["n"] >= 3],
