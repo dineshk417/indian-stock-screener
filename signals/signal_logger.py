@@ -546,8 +546,8 @@ class SignalLogger:
 
             cur = self._exec(
                 conn,
-                f"SELECT AVG(pnl_r) AS avg_r FROM signal_log "
-                f"WHERE id IN ({dedup_sub}) AND outcome NOT IN (?,?)",
+                f"SELECT AVG(net_pnl_r) AS avg_r FROM signal_log "
+                f"WHERE id IN ({dedup_sub}) AND outcome NOT IN (?,?) AND net_pnl_r IS NOT NULL",
                 params + [OUTCOME_OPEN, OUTCOME_EXPIRED],
             )
             avg_r_row = cur.fetchone()
@@ -571,9 +571,15 @@ class SignalLogger:
                 f"""
                 SELECT strategy,
                        COUNT(*) AS total,
-                       SUM(CASE WHEN outcome IN (?,?) OR (outcome=? AND pnl_r>0) THEN 1 ELSE 0 END) AS wins,
-                       SUM(CASE WHEN outcome=? OR (outcome=? AND pnl_r<=0) THEN 1 ELSE 0 END)       AS losses,
-                       AVG(CASE WHEN outcome NOT IN (?,?) THEN pnl_r END)        AS avg_r,
+                       SUM(CASE WHEN outcome=? THEN 1 ELSE 0 END) AS open_count,
+                       SUM(CASE WHEN outcome=? THEN 1 ELSE 0 END) AS expired_count,
+                       SUM(CASE WHEN outcome IN (?,?)
+                                  OR (outcome=? AND COALESCE(net_pnl_inr, gross_pnl_inr, 0) > 0)
+                                THEN 1 ELSE 0 END) AS wins,
+                       SUM(CASE WHEN outcome=?
+                                  OR (outcome=? AND COALESCE(net_pnl_inr, gross_pnl_inr, 0) <= 0)
+                                THEN 1 ELSE 0 END) AS losses,
+                       AVG(CASE WHEN outcome NOT IN (?,?) AND net_pnl_r IS NOT NULL THEN net_pnl_r END) AS avg_r,
                        SUM(CASE WHEN outcome NOT IN (?,?) THEN net_pnl_inr END)  AS net_pnl,
                        AVG(CASE WHEN outcome NOT IN (?,?) THEN net_pnl_inr END)  AS avg_net_pnl
                 FROM signal_log
@@ -581,6 +587,8 @@ class SignalLogger:
                 GROUP BY strategy
                 """,
                 [
+                    OUTCOME_OPEN,
+                    OUTCOME_EXPIRED,
                     OUTCOME_TARGET1, OUTCOME_TARGET2, OUTCOME_SQUARED_OFF,
                     OUTCOME_STOPPED, OUTCOME_SQUARED_OFF,
                     OUTCOME_OPEN, OUTCOME_EXPIRED,
@@ -593,7 +601,8 @@ class SignalLogger:
             cur = self._exec(
                 conn,
                 f"SELECT COUNT(*) AS cnt FROM signal_log "
-                f"WHERE id IN ({dedup_sub}) AND outcome=? AND pnl_r > 0",
+                f"WHERE id IN ({dedup_sub}) AND outcome=? "
+                f"AND COALESCE(net_pnl_inr, gross_pnl_inr, 0) > 0",
                 params + [OUTCOME_SQUARED_OFF],
             )
             sq_profitable = (cur.fetchone() or {}).get("cnt", 0) or 0
@@ -609,17 +618,21 @@ class SignalLogger:
 
         by_strategy = {}
         for r in strat_rows:
-            s_wins   = r["wins"]   or 0
-            s_losses = r["losses"] or 0
-            s_closed = s_wins + s_losses
+            s_wins    = r["wins"]         or 0
+            s_losses  = r["losses"]       or 0
+            s_open    = r["open_count"]   or 0
+            s_expired = r["expired_count"] or 0
+            s_closed  = s_wins + s_losses
             by_strategy[r["strategy"]] = {
-                "total":       r["total"],
-                "wins":        s_wins,
-                "losses":      s_losses,
-                "win_rate":    round(s_wins / s_closed * 100, 1) if s_closed else 0.0,
-                "avg_r":       round(r["avg_r"], 3)        if r["avg_r"]       is not None else None,
-                "net_pnl_inr": round(r["net_pnl"], 2)     if r["net_pnl"]     is not None else None,
-                "avg_net_pnl": round(r["avg_net_pnl"], 2) if r["avg_net_pnl"] is not None else None,
+                "total":        r["total"],
+                "open_count":   s_open,
+                "expired_count": s_expired,
+                "wins":         s_wins,
+                "losses":       s_losses,
+                "win_rate":     round(s_wins / s_closed * 100, 1) if s_closed else 0.0,
+                "avg_r":        round(r["avg_r"], 3)        if r["avg_r"]       is not None else None,
+                "net_pnl_inr":  round(r["net_pnl"], 2)     if r["net_pnl"]     is not None else None,
+                "avg_net_pnl":  round(r["avg_net_pnl"], 2) if r["avg_net_pnl"] is not None else None,
             }
 
         target_wins = by_outcome.get(OUTCOME_TARGET1, 0) + by_outcome.get(OUTCOME_TARGET2, 0)

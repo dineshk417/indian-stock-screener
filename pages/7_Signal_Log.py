@@ -837,9 +837,10 @@ with tab_perf:
                     "Total":      s["total"],
                     "Wins":       s["wins"],
                     "Losses":     s["losses"],
-                    "Open":       s["total"] - s_closed,
+                    "Open":       s.get("open_count", 0),
+                    "Expired":    s.get("expired_count", 0),
                     "Win Rate":   f"{s['win_rate']}%" if s_closed >= 3 else ("—" if s_closed < 3 else f"{s['win_rate']}%*"),
-                    "Avg R":      f"{s['avg_r']:+.2f}R" if s.get("avg_r") is not None else "—",
+                    "Avg R (net)": f"{s['avg_r']:+.2f}R" if s.get("avg_r") is not None else "—",
                     "Net P&L ₹":  f"₹{s['net_pnl_inr']:+,.0f}" if s.get("net_pnl_inr") is not None else "—",
                 })
             _df_s = pd.DataFrame(s_rows).set_index("Strategy")
