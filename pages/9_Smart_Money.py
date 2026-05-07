@@ -1,0 +1,459 @@
+"""
+Page 9: Smart Money Tracker
+- Bulk & Block Deals  (NSE — trades >0.5% equity in a single session)
+- FII / DII Daily Flow (NSE — daily net institutional activity)
+- Insider / Promoter Trades (SEBI PIT disclosures via NSE)
+- Institutional Holders  (yfinance — top holders for Nifty 50)
+"""
+import datetime as _dt
+
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
+from data.smart_money import (
+    fetch_bulk_deals,
+    fetch_block_deals,
+    fetch_fii_dii_flow,
+    fetch_insider_trades,
+    fetch_institutional_holders,
+)
+from config.stock_universe import NIFTY_50
+
+st.set_page_config(page_title="Smart Money · ShareSaathi", layout="wide", page_icon="🏦")
+from ui.styles import inject_global_css, page_header
+inject_global_css()
+
+page_header(
+    "🏦 Smart Money Tracker",
+    subtitle="NSE · Institutional Activity · SEBI Disclosures",
+    badge="DAILY",
+    badge_color="#7c83fd",
+)
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("Filters")
+    period_opt = st.selectbox("Period", ["Last 7 days", "Last 15 days", "Last 30 days", "Last 60 days"])
+    _period_map = {"Last 7 days": 7, "Last 15 days": 15, "Last 30 days": 30, "Last 60 days": 60}
+    days_back = _period_map[period_opt]
+
+    txn_filter = st.radio("Transaction Type", ["All", "Buy", "Sell"], horizontal=True)
+
+    st.divider()
+    st.caption(
+        "Data: NSE India (Bulk/Block/FII/Insider) · yfinance (Holdings). "
+        "Cached 1 hour. All figures in ₹ Crore unless stated."
+    )
+
+# ── Tabs ───────────────────────────────────────────────────────────────────────
+tab_deals, tab_flow, tab_insider, tab_holders = st.tabs([
+    "📦 Bulk & Block Deals",
+    "🌊 FII / DII Flow",
+    "🔏 Insider Trades",
+    "🏛 Top Holders",
+])
+
+
+# ── Helper: styled empty state ──────────────────────────────────────────────────
+def _empty(msg: str, sub: str = ""):
+    st.markdown(
+        f'<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);'
+        f'border-radius:14px;padding:32px;text-align:center;margin:12px 0;">'
+        f'<div style="font-size:1.5rem;margin-bottom:8px;">📭</div>'
+        f'<div style="color:#e2e8f0;font-weight:700;margin-bottom:4px;">{msg}</div>'
+        f'<div style="color:#475569;font-size:0.8rem;">{sub}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _nse_unavailable():
+    st.markdown(
+        '<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.18);'
+        'border-left:3px solid #f0b429;border-radius:10px;padding:14px 18px;margin-bottom:14px;">'
+        '<span style="color:#f0b429;font-weight:700;">⚠ NSE API unavailable · </span>'
+        '<span style="color:#94a3b8;font-size:0.82rem;">'
+        'NSE India blocks certain cloud IPs. Try refreshing — the session sometimes '
+        'recovers automatically. If the issue persists, the data will update when NSE '
+        'becomes reachable.'
+        '</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _type_col(df: pd.DataFrame, col: str = "Type") -> pd.DataFrame:
+    """Filter by Buy/Sell based on sidebar selection."""
+    if txn_filter == "All" or col not in df.columns:
+        return df
+    return df[df[col].str.upper().str.contains(txn_filter.upper(), na=False)]
+
+
+def _value_badge(val: float) -> str:
+    if val >= 500:   return "#00c896"
+    if val >= 100:   return "#f0b429"
+    return "#94a3b8"
+
+
+def _kpi_card(label: str, value: str, sub: str = "", color: str = "#f1f5f9") -> str:
+    return (
+        f'<div style="background:linear-gradient(145deg,#1a1f35,#141828);'
+        f'border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;">'
+        f'<div style="color:#64748b;font-size:0.6rem;font-weight:700;text-transform:uppercase;'
+        f'letter-spacing:0.09em;margin-bottom:6px;">{label}</div>'
+        f'<div style="color:{color};font-size:1.4rem;font-weight:800;">{value}</div>'
+        f'<div style="color:#475569;font-size:0.7rem;margin-top:3px;">{sub}</div>'
+        f'</div>'
+    )
+
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TAB 1 — BULK & BLOCK DEALS                                                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+with tab_deals:
+    with st.spinner("Fetching bulk & block deals from NSE…"):
+        bulk_df  = fetch_bulk_deals(days_back)
+        block_df = fetch_block_deals(days_back)
+
+    nse_ok = not bulk_df.empty or not block_df.empty
+
+    if not nse_ok:
+        _nse_unavailable()
+
+    # Combine bulk + block
+    frames = [df for df in (bulk_df, block_df) if not df.empty]
+    if frames:
+        combined = pd.concat(frames, ignore_index=True).sort_values("Date", ascending=False)
+    else:
+        combined = pd.DataFrame()
+
+    if not combined.empty:
+        combined = _type_col(combined, "Type")
+
+    # ── Stats strip ──────────────────────────────────────────────────────────
+    if not combined.empty:
+        _n_bulk    = int((combined["Deal"] == "Bulk").sum())
+        _n_block   = int((combined["Deal"] == "Block").sum())
+        _n_buy     = int(combined["Type"].str.upper().str.contains("BUY", na=False).sum())
+        _n_sell    = len(combined) - _n_buy
+        _val_total = combined["Value ₹ Cr"].sum() if "Value ₹ Cr" in combined.columns else 0
+
+        st.markdown(
+            f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">'
+            + _kpi_card("Total Deals", str(len(combined)), f"{_n_bulk} Bulk · {_n_block} Block")
+            + _kpi_card("Buy Deals", str(_n_buy), "Entity buying stock", "#00c896")
+            + _kpi_card("Sell Deals", str(_n_sell), "Entity selling stock", "#ff4d6d")
+            + _kpi_card("Total Value", f"₹{_val_total:,.0f} Cr", "Combined turnover", "#f0b429")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # ── Stock filter ─────────────────────────────────────────────────────
+        all_symbols = sorted(combined["Symbol"].dropna().unique()) if "Symbol" in combined.columns else []
+        sel_symbols = st.multiselect("Filter by Stock", all_symbols, placeholder="All stocks")
+        if sel_symbols:
+            combined = combined[combined["Symbol"].isin(sel_symbols)]
+
+        # ── Deal cards ───────────────────────────────────────────────────────
+        st.markdown(
+            '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
+            'text-transform:uppercase;letter-spacing:0.09em;margin-bottom:10px;">'
+            f'Showing {len(combined)} deal(s)</div>',
+            unsafe_allow_html=True,
+        )
+
+        display_cols = [c for c in ["Date", "Symbol", "Deal", "Entity", "Type", "Shares", "Price ₹", "Value ₹ Cr"] if c in combined.columns]
+        show_df = combined[display_cols].copy()
+        if "Date" in show_df.columns:
+            show_df["Date"] = show_df["Date"].dt.strftime("%d %b %Y")
+
+        def _deal_type_style(v):
+            v = str(v).upper()
+            if "BUY" in v:   return "color:#00c896;font-weight:700"
+            if "SELL" in v:  return "color:#ff4d6d;font-weight:700"
+            return ""
+
+        def _deal_kind_style(v):
+            return "color:#7c83fd;font-weight:600" if v == "Block" else "color:#f0b429;font-weight:600"
+
+        style_cols = {}
+        if "Type" in show_df.columns:  style_cols["Type"] = _deal_type_style
+        if "Deal" in show_df.columns:  style_cols["Deal"] = _deal_kind_style
+
+        styled = show_df.style.map(lambda v: style_cols.get("Type", lambda x: "")(v) if "Type" in show_df.columns else "", subset=["Type"] if "Type" in show_df.columns else [])
+        if "Type" in show_df.columns:
+            styled = styled.map(_deal_type_style, subset=["Type"])
+        if "Deal" in show_df.columns:
+            styled = styled.map(_deal_kind_style, subset=["Deal"])
+        if "Value ₹ Cr" in show_df.columns:
+            styled = styled.format({"Value ₹ Cr": lambda v: f"₹{v:,.1f} Cr" if pd.notna(v) else "—"})
+        if "Price ₹" in show_df.columns:
+            styled = styled.format({"Price ₹": lambda v: f"₹{float(v):,.2f}" if pd.notna(v) else "—"})
+        if "Shares" in show_df.columns:
+            styled = styled.format({"Shares": lambda v: f"{int(v):,}" if pd.notna(v) else "—"})
+
+        st.dataframe(styled, use_container_width=True, height=480, hide_index=True)
+
+        csv = combined.to_csv(index=False).encode()
+        st.download_button("⬇ Download CSV", csv,
+                           file_name=f"bulk_block_deals_{_dt.date.today()}.csv",
+                           mime="text/csv")
+    else:
+        _empty("No deals found", f"No bulk or block deals in the last {days_back} days for selected filters.")
+
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TAB 2 — FII / DII FLOW                                                     ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+with tab_flow:
+    with st.spinner("Fetching FII/DII activity from NSE…"):
+        flow_df = fetch_fii_dii_flow(days_back)
+
+    if flow_df.empty:
+        _nse_unavailable()
+        _empty("FII/DII data unavailable", "NSE publishes this data daily after market close.")
+    else:
+        # Separate FII and DII
+        _fii = flow_df[flow_df["Category"].str.upper().str.contains("FII|FPI", na=False)] if "Category" in flow_df.columns else pd.DataFrame()
+        _dii = flow_df[flow_df["Category"].str.upper().str.contains("DII", na=False)] if "Category" in flow_df.columns else pd.DataFrame()
+
+        # ── KPI strip ────────────────────────────────────────────────────────
+        def _net_sum(df: pd.DataFrame) -> float:
+            return float(df["Net ₹Cr"].sum()) if "Net ₹Cr" in df.columns and not df.empty else 0.0
+
+        fii_net = _net_sum(_fii)
+        dii_net = _net_sum(_dii)
+        combined_net = fii_net + dii_net
+
+        fii_col = "#00c896" if fii_net >= 0 else "#ff4d6d"
+        dii_col = "#00c896" if dii_net >= 0 else "#ff4d6d"
+        cmb_col = "#00c896" if combined_net >= 0 else "#ff4d6d"
+
+        st.markdown(
+            f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">'
+            + _kpi_card("FII / FPI Net", f"₹{fii_net:+,.0f} Cr", f"{'Buying' if fii_net>=0 else 'Selling'} in period", fii_col)
+            + _kpi_card("DII Net", f"₹{dii_net:+,.0f} Cr", f"{'Buying' if dii_net>=0 else 'Selling'} in period", dii_col)
+            + _kpi_card("Combined Net", f"₹{combined_net:+,.0f} Cr", "FII + DII market direction", cmb_col)
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # ── Daily bar chart ───────────────────────────────────────────────────
+        if not _fii.empty and "Date" in _fii.columns and "Net ₹Cr" in _fii.columns:
+            _fii_sorted = _fii.sort_values("Date")
+            _dii_sorted = _dii.sort_values("Date") if not _dii.empty else pd.DataFrame()
+
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=_fii_sorted["Date"],
+                y=_fii_sorted["Net ₹Cr"],
+                name="FII / FPI",
+                marker_color=[("#00c896" if v >= 0 else "#ff4d6d") for v in _fii_sorted["Net ₹Cr"]],
+                opacity=0.85,
+                hovertemplate="<b>FII</b> %{x}<br>Net: ₹%{y:+,.0f} Cr<extra></extra>",
+            ))
+            if not _dii_sorted.empty and "Net ₹Cr" in _dii_sorted.columns:
+                fig.add_trace(go.Bar(
+                    x=_dii_sorted["Date"],
+                    y=_dii_sorted["Net ₹Cr"],
+                    name="DII",
+                    marker_color=[("#7c83fd" if v >= 0 else "#f0b429") for v in _dii_sorted["Net ₹Cr"]],
+                    opacity=0.85,
+                    hovertemplate="<b>DII</b> %{x}<br>Net: ₹%{y:+,.0f} Cr<extra></extra>",
+                ))
+            fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.15)")
+            fig.update_layout(
+                title=dict(text="Daily Net Institutional Flow (₹ Cr)", font=dict(color="#94a3b8", size=13)),
+                barmode="group",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=40, b=40, l=60, r=20), height=320,
+                legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#94a3b8")),
+                xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(color="#6b7a99")),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(color="#6b7a99"), title="₹ Cr"),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # ── Cumulative flow chart ─────────────────────────────────────────────
+        if not _fii.empty and "Date" in _fii.columns and "Net ₹Cr" in _fii.columns:
+            _fii_c = _fii.sort_values("Date").copy()
+            _fii_c["Cumulative"] = _fii_c["Net ₹Cr"].cumsum()
+            final = float(_fii_c["Cumulative"].iloc[-1])
+            lc = "#00c896" if final >= 0 else "#ff4d6d"
+            fc = "rgba(0,200,150,0.08)" if final >= 0 else "rgba(255,77,109,0.08)"
+
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(
+                x=_fii_c["Date"], y=_fii_c["Cumulative"],
+                mode="lines+markers",
+                name="FII Cumulative",
+                line=dict(color=lc, width=2),
+                fill="tozeroy", fillcolor=fc,
+                hovertemplate="%{x}<br>Cumulative: ₹%{y:+,.0f} Cr<extra></extra>",
+            ))
+            fig2.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.15)")
+            fig2.update_layout(
+                title=dict(text="FII Cumulative Net Flow (₹ Cr)", font=dict(color="#94a3b8", size=13)),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=40, b=40, l=60, r=20), height=260,
+                xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(color="#6b7a99")),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(color="#6b7a99"), title="₹ Cr"),
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+        # ── Raw table ─────────────────────────────────────────────────────────
+        with st.expander("Raw Daily Data"):
+            show = flow_df.copy()
+            if "Date" in show.columns:
+                show["Date"] = show["Date"].dt.strftime("%d %b %Y")
+            st.dataframe(show, use_container_width=True, hide_index=True)
+
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TAB 3 — INSIDER / PROMOTER TRADES                                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+with tab_insider:
+    with st.spinner("Fetching SEBI PIT disclosures…"):
+        insider_df = fetch_insider_trades(days_back)
+
+    if insider_df.empty:
+        _nse_unavailable()
+        _empty(
+            "No insider disclosures found",
+            "SEBI PIT data is fetched from NSE's corporate disclosures API. "
+            "Try a wider period or check back when NSE API is accessible.",
+        )
+    else:
+        insider_df = _type_col(insider_df, "Txn")
+
+        # ── KPIs ─────────────────────────────────────────────────────────────
+        _n_buy  = int(insider_df["Txn"].str.upper().str.contains("BUY|ACQUI", na=False).sum()) if "Txn" in insider_df.columns else 0
+        _n_sell = len(insider_df) - _n_buy
+        _val    = insider_df["Value ₹ Cr"].sum() if "Value ₹ Cr" in insider_df.columns else 0
+
+        st.markdown(
+            f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">'
+            + _kpi_card("Total Disclosures", str(len(insider_df)), f"Last {days_back} days")
+            + _kpi_card("Acquisitions", str(_n_buy), "Buy / acquire", "#00c896")
+            + _kpi_card("Disposals", str(_n_sell), "Sell / dispose", "#ff4d6d")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # ── Category filter ──────────────────────────────────────────────────
+        if "Category" in insider_df.columns:
+            cats = sorted(insider_df["Category"].dropna().unique())
+            sel_cats = st.multiselect("Filter by Category", cats, placeholder="All categories")
+            if sel_cats:
+                insider_df = insider_df[insider_df["Category"].isin(sel_cats)]
+
+        # ── Table ────────────────────────────────────────────────────────────
+        disp_cols = [c for c in [
+            "Disclosed", "Symbol", "Company", "Person", "Category",
+            "Txn", "Shares", "Value ₹ Cr", "Before %", "After %", "Mode",
+        ] if c in insider_df.columns]
+        show_ins = insider_df[disp_cols].copy()
+        if "Disclosed" in show_ins.columns:
+            show_ins["Disclosed"] = show_ins["Disclosed"].dt.strftime("%d %b %Y")
+
+        def _ins_txn_style(v):
+            v = str(v).upper()
+            if any(k in v for k in ("BUY", "ACQUI", "CREAT")):  return "color:#00c896;font-weight:700"
+            if any(k in v for k in ("SELL", "DISPO", "PLEDGE")): return "color:#ff4d6d;font-weight:700"
+            return "color:#94a3b8"
+
+        styled_ins = show_ins.style
+        if "Txn" in show_ins.columns:
+            styled_ins = styled_ins.map(_ins_txn_style, subset=["Txn"])
+        if "Value ₹ Cr" in show_ins.columns:
+            styled_ins = styled_ins.format({"Value ₹ Cr": lambda v: f"₹{v:,.1f} Cr" if pd.notna(v) else "—"})
+
+        st.dataframe(styled_ins, use_container_width=True, height=480, hide_index=True)
+
+        csv_ins = insider_df.to_csv(index=False).encode()
+        st.download_button("⬇ Download CSV", csv_ins,
+                           file_name=f"insider_trades_{_dt.date.today()}.csv",
+                           mime="text/csv")
+
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  TAB 4 — TOP INSTITUTIONAL HOLDERS                                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+with tab_holders:
+    st.markdown(
+        '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
+        'text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Nifty 50 — Top Institutional Holdings</div>'
+        '<div style="font-size:0.72rem;color:#475569;margin-bottom:14px;">'
+        'Sourced from Yahoo Finance · Updates quarterly · Figures in USD (Yahoo Finance reports in USD)</div>',
+        unsafe_allow_html=True,
+    )
+
+    _n50_tickers = tuple(NIFTY_50.values())
+
+    with st.spinner("Fetching institutional holders for Nifty 50…"):
+        holders_df = fetch_institutional_holders(_n50_tickers)
+
+    if holders_df.empty:
+        _empty(
+            "Holdings data unavailable",
+            "yfinance institutional_holders data may not be available for all NSE stocks."
+        )
+    else:
+        # ── Stock picker ────────────────────────────────────────────────────
+        all_tickers = sorted(holders_df["Ticker"].dropna().unique()) if "Ticker" in holders_df.columns else []
+        sel_tickers = st.multiselect("Filter by Stock", all_tickers, placeholder="All Nifty 50 stocks")
+        if sel_tickers:
+            holders_df = holders_df[holders_df["Ticker"].isin(sel_tickers)]
+
+        # ── Top institution summary ──────────────────────────────────────────
+        if "Institution" in holders_df.columns and "% Held" in holders_df.columns:
+            top_inst = (
+                holders_df.groupby("Institution")["% Held"]
+                .mean()
+                .sort_values(ascending=False)
+                .head(10)
+                .reset_index()
+            )
+            top_inst.columns = ["Institution", "Avg % Held"]
+
+            fig3 = go.Figure(go.Bar(
+                x=top_inst["Avg % Held"],
+                y=top_inst["Institution"],
+                orientation="h",
+                marker_color="#7c83fd",
+                hovertemplate="%{y}<br>Avg holding: %{x:.2f}%<extra></extra>",
+            ))
+            fig3.update_layout(
+                title=dict(text="Top 10 Institutions by Average Stake (across held stocks)", font=dict(color="#94a3b8", size=13)),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=40, b=40, l=240, r=20), height=340,
+                xaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(color="#6b7a99"), title="Avg % Held"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(color="#6b7a99"), autorange="reversed"),
+            )
+            st.plotly_chart(fig3, use_container_width=True)
+
+        # ── Full table ───────────────────────────────────────────────────────
+        disp_cols_h = [c for c in ["Ticker", "Institution", "Shares", "Date", "% Held", "Value $"] if c in holders_df.columns]
+        show_h = holders_df[disp_cols_h].copy()
+        if "Date" in show_h.columns:
+            show_h["Date"] = pd.to_datetime(show_h["Date"], errors="coerce").dt.strftime("%d %b %Y")
+
+        def _pct_style(v):
+            try:
+                f = float(v)
+                if f >= 5:   return "color:#00c896;font-weight:700"
+                if f >= 2:   return "color:#f0b429;font-weight:600"
+                return "color:#94a3b8"
+            except Exception:
+                return ""
+
+        styled_h = show_h.style
+        if "% Held" in show_h.columns:
+            styled_h = styled_h.map(_pct_style, subset=["% Held"])
+            styled_h = styled_h.format({"% Held": lambda v: f"{float(v):.2f}%" if pd.notna(v) else "—"})
+
+        st.dataframe(styled_h, use_container_width=True, height=480, hide_index=True)
+
+        csv_h = holders_df.to_csv(index=False).encode()
+        st.download_button("⬇ Download CSV", csv_h,
+                           file_name=f"institutional_holders_{_dt.date.today()}.csv",
+                           mime="text/csv")
