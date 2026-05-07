@@ -1,8 +1,8 @@
 """
 Page 9: Smart Money Tracker
-- Bulk & Block Deals  (NSE — trades >0.5% equity in a single session)
-- FII / DII Daily Flow (NSE — daily net institutional activity)
-- Insider / Promoter Trades (SEBI PIT disclosures via NSE)
+- Bulk & Block Deals  (NSE Archive CDN — no session/cookies required)
+- FII / DII Daily Flow (NSE Archive per-day CSVs → SEBI page fallback)
+- Insider / Promoter Trades (BSE India API — stateless, cloud-safe)
 - Institutional Holders  (yfinance — top holders for Nifty 50)
 """
 import datetime as _dt
@@ -26,7 +26,7 @@ inject_global_css()
 
 page_header(
     "🏦 Smart Money Tracker",
-    subtitle="NSE · Institutional Activity · SEBI Disclosures",
+    subtitle="NSE Archives · BSE API · SEBI · Institutional Activity",
     badge="DAILY",
     badge_color="#7c83fd",
 )
@@ -42,8 +42,11 @@ with st.sidebar:
 
     st.divider()
     st.caption(
-        "Data: NSE India (Bulk/Block/FII/Insider) · yfinance (Holdings). "
-        "Cached 1 hour. All figures in ₹ Crore unless stated."
+        "**Bulk/Block** — NSE Archive CDN (no cookie)\n\n"
+        "**FII/DII** — NSE Archive CSVs per day\n\n"
+        "**Insider** — BSE India API (stateless)\n\n"
+        "**Holdings** — Yahoo Finance\n\n"
+        "Cached 1 hour · All ₹ figures in Crore"
     )
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
@@ -68,16 +71,24 @@ def _empty(msg: str, sub: str = ""):
     )
 
 
-def _nse_unavailable():
+def _source_badge(source: str, color: str = "#7c83fd"):
     st.markdown(
-        '<div style="background:rgba(240,180,41,0.06);border:1px solid rgba(240,180,41,0.18);'
-        'border-left:3px solid #f0b429;border-radius:10px;padding:14px 18px;margin-bottom:14px;">'
-        '<span style="color:#f0b429;font-weight:700;">⚠ NSE API unavailable · </span>'
-        '<span style="color:#94a3b8;font-size:0.82rem;">'
-        'NSE India blocks certain cloud IPs. Try refreshing — the session sometimes '
-        'recovers automatically. If the issue persists, the data will update when NSE '
-        'becomes reachable.'
-        '</span></div>',
+        f'<div style="display:inline-block;background:rgba(124,131,253,0.08);'
+        f'border:1px solid rgba(124,131,253,0.2);border-radius:6px;'
+        f'padding:3px 10px;font-size:0.68rem;font-weight:700;'
+        f'color:{color};letter-spacing:0.06em;margin-bottom:12px;">'
+        f'SOURCE · {source}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _source_unavailable(source: str, why: str = ""):
+    st.markdown(
+        f'<div style="background:rgba(255,77,109,0.04);border:1px solid rgba(255,77,109,0.15);'
+        f'border-left:3px solid #ff4d6d;border-radius:10px;padding:12px 16px;margin-bottom:12px;">'
+        f'<span style="color:#ff4d6d;font-weight:700;">No data · {source}</span>'
+        + (f'<br><span style="color:#94a3b8;font-size:0.78rem;">{why}</span>' if why else "")
+        + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -111,14 +122,10 @@ def _kpi_card(label: str, value: str, sub: str = "", color: str = "#f1f5f9") -> 
 # ║  TAB 1 — BULK & BLOCK DEALS                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_deals:
-    with st.spinner("Fetching bulk & block deals from NSE…"):
+    _source_badge("NSE Archive CDN · nsearchives.nseindia.com · No session required")
+    with st.spinner("Fetching bulk & block deals…"):
         bulk_df  = fetch_bulk_deals(days_back)
         block_df = fetch_block_deals(days_back)
-
-    nse_ok = not bulk_df.empty or not block_df.empty
-
-    if not nse_ok:
-        _nse_unavailable()
 
     # Combine bulk + block
     frames = [df for df in (bulk_df, block_df) if not df.empty]
@@ -199,19 +206,30 @@ with tab_deals:
                            file_name=f"bulk_block_deals_{_dt.date.today()}.csv",
                            mime="text/csv")
     else:
-        _empty("No deals found", f"No bulk or block deals in the last {days_back} days for selected filters.")
+        _source_unavailable(
+            "NSE Archive",
+            "The archive CDN may be temporarily down. "
+            "Data should return automatically — try refreshing in a few minutes.",
+        )
+        _empty("No deals found", f"No bulk or block deals in the last {days_back} days.")
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 2 — FII / DII FLOW                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_flow:
-    with st.spinner("Fetching FII/DII activity from NSE…"):
+    _source_badge("NSE Archive per-day CSVs → SEBI FPI page fallback")
+    with st.spinner("Fetching FII/DII flow…"):
         flow_df = fetch_fii_dii_flow(days_back)
 
     if flow_df.empty:
-        _nse_unavailable()
-        _empty("FII/DII data unavailable", "NSE publishes this data daily after market close.")
+        _source_unavailable(
+            "NSE Archive + SEBI fallback",
+            "NSE publishes dated FII CSVs after market close (~4 PM IST). "
+            "SEBI's FPI statistics page is tried as a fallback. "
+            "Both appear temporarily unreachable — try refreshing after market hours.",
+        )
+        _empty("FII/DII data unavailable", "Data updates daily after market close.")
     else:
         # Separate FII and DII
         _fii = flow_df[flow_df["Category"].str.upper().str.contains("FII|FPI", na=False)] if "Category" in flow_df.columns else pd.DataFrame()
@@ -312,16 +330,17 @@ with tab_flow:
 # ║  TAB 3 — INSIDER / PROMOTER TRADES                                          ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_insider:
+    _source_badge("BSE India API · api.bseindia.com · Stateless / no cookie", color="#00c896")
     with st.spinner("Fetching SEBI PIT disclosures…"):
         insider_df = fetch_insider_trades(days_back)
 
     if insider_df.empty:
-        _nse_unavailable()
-        _empty(
-            "No insider disclosures found",
-            "SEBI PIT data is fetched from NSE's corporate disclosures API. "
-            "Try a wider period or check back when NSE API is accessible.",
+        _source_unavailable(
+            "BSE India API",
+            "BSE's SAST disclosures API returned no data for the selected period. "
+            "Try widening the date range — BSE may have a short delay on new filings.",
         )
+        _empty("No insider disclosures found", "Try 'Last 60 days' for a wider window.")
     else:
         insider_df = _type_col(insider_df, "Txn")
 
