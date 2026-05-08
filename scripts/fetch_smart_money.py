@@ -85,6 +85,18 @@ def _nse_api(path: str, params: dict | None = None, warm: str | None = None) -> 
         return None
 
 
+_BSE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin":          "https://www.bseindia.com",
+    "Referer":         "https://www.bseindia.com/",
+}
+
+
 def _plain_get(url: str, timeout: int = 15) -> requests.Response | None:
     try:
         r = requests.get(url, headers=_NSE_HEADERS, timeout=timeout)
@@ -92,6 +104,16 @@ def _plain_get(url: str, timeout: int = 15) -> requests.Response | None:
         return r
     except Exception as exc:
         log.warning("GET %s: %s", url, exc)
+        return None
+
+
+def _bse_get(url: str, timeout: int = 15) -> requests.Response | None:
+    try:
+        r = requests.get(url, headers=_BSE_HEADERS, timeout=timeout)
+        r.raise_for_status()
+        return r
+    except Exception as exc:
+        log.warning("BSE GET %s: %s", url, exc)
         return None
 
 
@@ -230,6 +252,10 @@ _FII_COL_MAP = {
     "category":            "category",
     "dtype":               "category",
     "Segment":             "category",
+    # NSE fiidiiTradeReact — observed column variants
+    "buyValue":            "buy_cr",
+    "sellValue":           "sell_cr",
+    "netValue":            "net_cr",
     "Buy Value (₹ Cr)":   "buy_cr",
     "purchasedValueNSE":  "buy_cr",
     "Purchase (Net)":     "buy_cr",
@@ -376,12 +402,12 @@ def fetch_insider_trades() -> list[dict]:
                 log.info("  insider: %d rows from NSE API", len(rows))
                 return rows
 
-    # 2. BSE SAST API — try multiple date formats (BSE is inconsistent)
+    # 2. BSE SAST API — requires BSE-specific Origin/Referer headers
     bse_url = "https://api.bseindia.com/BseIndiaAPI/api/SAST_Regs_Disclosures/w"
-    for date_fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+    for date_fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
         from_bse = (today - timedelta(days=DAYS_BACK)).strftime(date_fmt)
         to_bse   = today.strftime(date_fmt)
-        r = _plain_get(
+        r = _bse_get(
             f"{bse_url}?pageno=1&strSearch=&DateFrom={from_bse}&DateTo={to_bse}"
             f"&ScripCode=&Category=&Type="
         )
@@ -389,6 +415,7 @@ def fetch_insider_trades() -> list[dict]:
             continue
         try:
             data = r.json()
+            log.info("  insider BSE raw keys: %s", list(data.keys()) if isinstance(data, dict) else type(data))
             rows_raw = data.get("Table", data.get("Table1", data)) if isinstance(data, dict) else data
             if isinstance(rows_raw, list) and rows_raw:
                 df = pd.DataFrame(rows_raw)
@@ -396,6 +423,8 @@ def fetch_insider_trades() -> list[dict]:
                 if rows:
                     log.info("  insider: %d rows from BSE API (fmt=%s)", len(rows), date_fmt)
                     return rows
+            else:
+                log.info("  insider BSE (%s): empty rows_raw", date_fmt)
         except Exception as exc:
             log.debug("  insider BSE (%s): %s", date_fmt, exc)
 
@@ -403,24 +432,83 @@ def fetch_insider_trades() -> list[dict]:
     return []
 
 
+# ── Cache merge helpers ────────────────────────────────────────────────────────
+
+def _load_existing() -> dict:
+    out = os.path.realpath(CACHE_PATH)
+    if not os.path.exists(out):
+        return {}
+    try:
+        with open(out) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _merge_fii(existing: list[dict], fresh: list[dict]) -> list[dict]:
+    """
+    Accumulate FII/DII rows across daily runs.
+    fiidiiTradeReact returns only the latest day — we merge with historical
+    rows from prior runs so we build up a 30-day series over time.
+    """
+    seen: set[tuple] = set()
+    merged: list[dict] = []
+    cutoff = (date.today() - timedelta(days=DAYS_BACK)).isoformat()
+    for row in existing + fresh:
+        d   = str(row.get("date", ""))
+        cat = str(row.get("category", ""))
+        if d < cutoff:
+            continue
+        key = (d, cat)
+        if key not in seen:
+            seen.add(key)
+            merged.append(row)
+    return sorted(merged, key=lambda r: r.get("date", ""), reverse=True)
+
+
+def _merge_insider(existing: list[dict], fresh: list[dict]) -> list[dict]:
+    """Deduplicate insider rows by (symbol, disclosed, person)."""
+    seen: set[tuple] = set()
+    merged: list[dict] = []
+    cutoff = (date.today() - timedelta(days=DAYS_BACK)).isoformat()
+    for row in fresh + existing:   # fresh first → prefer newer data
+        disc   = str(row.get("disclosed", ""))
+        sym    = str(row.get("symbol", ""))
+        person = str(row.get("person", ""))
+        if disc and disc < cutoff:
+            continue
+        key = (disc, sym, person)
+        if key not in seen:
+            seen.add(key)
+            merged.append(row)
+    return merged
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    existing = _load_existing()
+
     bulk   = fetch_bulk_deals()
     block  = fetch_block_deals()
     fii    = fetch_fii_dii_flow()
     inside = fetch_insider_trades()
 
+    # FII/DII: accumulate across daily runs (API returns only current-day data)
+    fii_merged    = _merge_fii(existing.get("fii_dii_flow", []), fii)
+    # Insider: merge fresh + historical, dedup by key
+    insider_merged = _merge_insider(existing.get("insider_trades", []), inside)
+
     cache = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "bulk_block_deals": bulk + block,
-        "fii_dii_flow":     fii,
-        "insider_trades":   inside,
+        "fii_dii_flow":     fii_merged,
+        "insider_trades":   insider_merged,
         "summary": {
             "bulk_count":    len(bulk),
             "block_count":   len(block),
-            "fii_rows":      len(fii),
-            "insider_count": len(inside),
+            "fii_rows":      len(fii_merged),
+            "insider_count": len(insider_merged),
         },
     }
 
@@ -431,7 +519,7 @@ def main() -> None:
 
     log.info(
         "Cache written → %s  (bulk=%d block=%d fii=%d insider=%d)",
-        out, len(bulk), len(block), len(fii), len(inside),
+        out, len(bulk), len(block), len(fii_merged), len(insider_merged),
     )
 
 

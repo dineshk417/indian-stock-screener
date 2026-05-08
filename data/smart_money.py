@@ -74,11 +74,15 @@ def fetch_fii_dii_flow(days: int = 30) -> pd.DataFrame:
     if df.empty:
         return df
     df = df.rename(columns={
-        "category": "Category",
-        "buy_cr":   "Buy ₹Cr",
-        "sell_cr":  "Sell ₹Cr",
-        "net_cr":   "Net ₹Cr",
-        "date":     "Date",
+        "category":  "Category",
+        "buy_cr":    "Buy ₹Cr",
+        "sell_cr":   "Sell ₹Cr",
+        "net_cr":    "Net ₹Cr",
+        "date":      "Date",
+        # fallback: raw NSE column names stored before normalisation
+        "buyValue":  "Buy ₹Cr",
+        "sellValue": "Sell ₹Cr",
+        "netValue":  "Net ₹Cr",
     })
     return df
 
