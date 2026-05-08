@@ -54,14 +54,16 @@ def cache_updated_at() -> datetime | None:
 def fetch_bulk_deals(days: int = 30) -> pd.DataFrame:
     data = _load_cache()
     rows = [r for r in data.get("bulk_block_deals", []) if r.get("category") == "BULK"]
-    return _to_df(rows, days, date_col="date")
+    df = _to_df(rows, days, date_col="date")
+    return _rename_deal_cols(df)
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_block_deals(days: int = 30) -> pd.DataFrame:
     data = _load_cache()
     rows = [r for r in data.get("bulk_block_deals", []) if r.get("category") == "BLOCK"]
-    return _to_df(rows, days, date_col="date")
+    df = _to_df(rows, days, date_col="date")
+    return _rename_deal_cols(df)
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -138,6 +140,26 @@ def _to_df(rows: list[dict], days: int, date_col: str) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     if date_col in df.columns:
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-        cutoff = pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.Timedelta(days=days)
+        cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
         df = df[df[date_col] >= cutoff]
     return df.reset_index(drop=True)
+
+
+def _rename_deal_cols(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    df = df.rename(columns={
+        "date":     "Date",
+        "symbol":   "Symbol",
+        "name":     "Name",
+        "entity":   "Entity",
+        "type":     "Type",
+        "shares":   "Shares",
+        "price":    "Price ₹",
+        "value_cr": "Value ₹ Cr",
+        "category": "Deal",
+    })
+    # Normalise deal type to Title Case so the style check (v == "Block") works
+    if "Deal" in df.columns:
+        df["Deal"] = df["Deal"].str.title()
+    return df
