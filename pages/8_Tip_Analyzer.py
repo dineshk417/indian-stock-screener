@@ -8,7 +8,11 @@ import hashlib
 import streamlit as st
 
 st.set_page_config(page_title="Tip Analyzer · NiftyEdge", layout="wide", page_icon="🔍")
-from ui.styles import inject_global_css, show_loading; inject_global_css()
+from ui.styles import inject_global_css, show_loading, theme_toggle; inject_global_css()
+with st.sidebar:
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    theme_toggle()
+
 
 # ── Page header (no <style> block — animations are in ui/styles.py) ────────────
 st.markdown(

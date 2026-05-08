@@ -26,7 +26,7 @@ except Exception as _exc:
     _import_error = _tb.format_exc()
 
 st.set_page_config(page_title="Signal Log · NiftyEdge", layout="wide", page_icon="📋")
-from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading, theme_toggle; inject_global_css()
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 @st.cache_data(ttl=600)
@@ -143,6 +143,8 @@ with st.sidebar:
         help="Capital per trade used to calculate costs and P&L.",
     )
 
+    st.divider()
+    theme_toggle()
 # ── Core data ─────────────────────────────────────────────────────────────────
 log       = get_signal_logger()
 today_str = _dt.date.today().isoformat()

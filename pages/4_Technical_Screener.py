@@ -9,7 +9,7 @@ from config.stock_universe import NIFTY_50, NIFTY_200
 from config.settings import RSI_PERIOD
 
 st.set_page_config(page_title="Technical Screener · NiftyEdge", layout="wide", page_icon="📈")
-from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading, theme_toggle; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
 page_header("📈 Technical Screener", subtitle="NSE · Equity · Technical Analysis")
@@ -47,6 +47,8 @@ with st.sidebar:
 
     run_btn = st.button("📈 Run Technical Scan", type="primary", width="stretch")
 
+    st.divider()
+    theme_toggle()
 # ── PRESET CARDS ──────────────────────────────────────────────────────────────
 PRESETS_UI = [
     {"label": "Oversold",     "icon": "🔻", "sub": "RSI < 35",        "color": "#ff4d6d", "rgb": "255,77,109",

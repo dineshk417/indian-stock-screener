@@ -10,7 +10,7 @@ from analysis.technical import compute_indicators
 from analysis.sentiment import analyze_market_sentiment
 from signals.swing_signals import generate_swing_signals
 from ui.components import signal_card
-from ui.styles import page_header, show_loading
+from ui.styles import page_header, theme_toggle, show_loading, theme_toggle
 from ui.charts import candlestick_chart, rsi_macd_chart
 from config.stock_universe import NIFTY_50, NIFTY_200
 
@@ -53,6 +53,8 @@ with st.sidebar:
     st.divider()
     with st.expander("📋 Strategy Criteria", expanded=False):
         st.markdown("""
+    st.divider()
+    theme_toggle()
 **Trend Pullback** — Close > SMA50 > SMA200, price within 5% of EMA21, RSI 35–65
 
 **Volume Breakout** — Above SMA200, RSI 50–75, volume ≥ 1.5× avg

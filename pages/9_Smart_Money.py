@@ -75,6 +75,8 @@ with st.sidebar:
         "All ₹ figures in Crore."
     )
 
+    st.divider()
+    theme_toggle()
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_deals, tab_flow, tab_insider, tab_holders = st.tabs([
     "📦 Bulk & Block Deals",

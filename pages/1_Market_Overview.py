@@ -33,7 +33,7 @@ def _live_quote(ticker: str) -> dict:
 
 # ── Page shell ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Market Overview · NiftyEdge", layout="wide", page_icon="📊")
-from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading, theme_toggle; inject_global_css()
 
 page_header("📊 Market Overview", subtitle="NSE · BSE · Live", badge="LIVE", badge_color="#00c896")
 
@@ -81,6 +81,11 @@ for _name, _ticker in main_indices.items():
     _df = fetch_index_data(_ticker, period="1y", interval="1d")
     if _df is not None and not _df.empty:
         hist_1y[_name] = _df
+
+
+with st.sidebar:
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    theme_toggle()
 
 # ── Global Markets (cached, refreshes every 5 min) ────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)

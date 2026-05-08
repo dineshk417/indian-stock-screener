@@ -13,7 +13,7 @@ from data.fetcher import fetch_bulk_fundamentals, fetch_stock_data, fetch_single
 from data.market_status import market_status, is_market_open
 from signals.intraday_signals import generate_intraday_signals
 from ui.components import signal_card
-from ui.styles import page_header, show_loading
+from ui.styles import page_header, theme_toggle, show_loading, theme_toggle
 from ui.charts import candlestick_chart
 from analysis.technical import compute_indicators
 from config.stock_universe import NIFTY_50
@@ -214,6 +214,8 @@ with st.sidebar:
     st.header("Controls")
     refresh_btn = st.button("🔄 Refresh Signals", type="primary", use_container_width=True)
 
+    st.divider()
+    theme_toggle()
 if refresh_btn:
     _cached_intraday_scan.clear()
 

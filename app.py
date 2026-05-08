@@ -86,7 +86,7 @@ except Exception:
 
 _catchup_signals()
 
-from ui.styles import inject_global_css
+from ui.styles import inject_global_css, theme_toggle
 inject_global_css()
 
 from signals.signal_logger import get_signal_logger
@@ -228,28 +228,34 @@ _pulse = "animation:pulse 1.4s ease-in-out infinite;" if (is_open or is_pre) els
 _now   = _dt.datetime.now(_IST).strftime("%H:%M IST")
 
 # ── TOP HEADER ─────────────────────────────────────────────────────────────────
-st.markdown(
-    f'<div style="display:flex;align-items:center;justify-content:space-between;'
-    f'padding:10px 0 18px;">'
-    f'<div>'
-    f'<div style="font-size:1.6rem;font-weight:900;letter-spacing:-0.03em;color:#f1f5f9;">'
-    f'Share<span style="background:linear-gradient(135deg,#f0b429,#f97316);'
-    f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Saathi</span></div>'
-    f'<div style="font-size:0.72rem;color:#475569;margin-top:2px;">AI-powered stock analysis · NSE/BSE</div>'
-    f'</div>'
-    f'<div style="display:flex;align-items:center;gap:8px;">'
-    f'<div style="display:inline-flex;align-items:center;gap:6px;'
-    f'background:rgba({_rgb},0.1);border:1px solid rgba({_rgb},0.25);'
-    f'border-radius:20px;padding:5px 12px;">'
-    f'<div style="width:7px;height:7px;border-radius:50%;background:{_sc};{_pulse}flex-shrink:0;"></div>'
-    f'<span style="color:{_sc};font-size:0.72rem;font-weight:700;">{status["status_label"].split("(")[0].strip()}</span>'
-    f'</div>'
-    f'<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);'
-    f'border-radius:20px;padding:5px 12px;font-size:0.72rem;color:#475569;">{_now}</div>'
-    f'</div>'
-    f'</div>',
-    unsafe_allow_html=True,
-)
+_hdr_col, _tog_col = st.columns([5, 1])
+with _hdr_col:
+    st.markdown(
+        f'<div style="display:flex;align-items:center;justify-content:space-between;'
+        f'padding:8px 0 16px;">'
+        f'<div>'
+        f'<div style="font-size:1.65rem;font-weight:900;letter-spacing:-0.045em;color:#e2e8f0;">'
+        f'Nifty<span style="background:linear-gradient(135deg,#3b82f6,#22c55e);'
+        f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Edge</span></div>'
+        f'<div style="font-size:0.7rem;color:#4b5a72;margin-top:2px;letter-spacing:0.04em;">'
+        f'AI-POWERED NSE/BSE ANALYSIS</div>'
+        f'</div>'
+        f'<div style="display:flex;align-items:center;gap:8px;">'
+        f'<div style="display:inline-flex;align-items:center;gap:6px;'
+        f'background:rgba({_rgb},0.08);border:1px solid rgba({_rgb},0.22);'
+        f'border-radius:20px;padding:5px 12px;">'
+        f'<div style="width:7px;height:7px;border-radius:50%;background:{_sc};{_pulse}flex-shrink:0;"></div>'
+        f'<span style="color:{_sc};font-size:0.7rem;font-weight:700;">{status["status_label"].split("(")[0].strip()}</span>'
+        f'</div>'
+        f'<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);'
+        f'border-radius:20px;padding:5px 12px;font-size:0.7rem;color:#4b5a72;">{_now}</div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+with _tog_col:
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    theme_toggle()
 
 # ── SVG ICON LIBRARY (used across tabs) ────────────────────────────────────────
 _SVG = {
