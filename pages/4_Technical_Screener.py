@@ -9,7 +9,7 @@ from config.stock_universe import NIFTY_50, NIFTY_200
 from config.settings import RSI_PERIOD
 
 st.set_page_config(page_title="Technical Screener · ShareSaathi", layout="wide", page_icon="📈")
-from ui.styles import inject_global_css, page_header; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────
 page_header("📈 Technical Screener", subtitle="NSE · Equity · Technical Analysis")
@@ -281,9 +281,10 @@ from ui.charts import candlestick_chart, rsi_macd_chart
 selected = st.selectbox("Select stock for chart:", result_df["ticker"].tolist(), label_visibility="collapsed")
 if selected:
     ticker_yf = result_df[result_df["ticker"] == selected]["ticker_yf"].iloc[0]
-    with st.spinner("Loading chart…"):
-        df = fetch_single_stock(ticker_yf)
-        if df is not None:
+    _chart_slot = show_loading(f"Fetching 1-year OHLCV data for {selected}…", "#00c896")
+    df = fetch_single_stock(ticker_yf)
+    _chart_slot.empty()
+    if df is not None:
             df_ind  = compute_indicators(df)
             summary = get_technical_summary(df_ind)
 

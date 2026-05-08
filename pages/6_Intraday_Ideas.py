@@ -13,7 +13,7 @@ from data.fetcher import fetch_bulk_fundamentals, fetch_stock_data, fetch_single
 from data.market_status import market_status, is_market_open
 from signals.intraday_signals import generate_intraday_signals
 from ui.components import signal_card
-from ui.styles import page_header
+from ui.styles import page_header, show_loading
 from ui.charts import candlestick_chart
 from analysis.technical import compute_indicators
 from config.stock_universe import NIFTY_50
@@ -176,7 +176,7 @@ if not status["is_market_open"] and not status["is_pre_market"]:
     st.stop()
 
 # ── SELECT LIQUID STOCKS ───────────────────────────────────────────────────────
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=900, show_spinner=False)
 def get_liquid_tickers(n: int = INTRADAY_LIQUID_STOCKS) -> list[str]:
     tickers    = list(NIFTY_50.values())
     price_data = fetch_stock_data(tickers, period="5d", interval="1d")
@@ -187,17 +187,20 @@ def get_liquid_tickers(n: int = INTRADAY_LIQUID_STOCKS) -> list[str]:
     volumes.sort(key=lambda x: x[1], reverse=True)
     return [t for t, _ in volumes[:n]]
 
-with st.spinner("Selecting liquid stocks..."):
-    liquid_tickers = get_liquid_tickers()
+_liq_slot = show_loading("Identifying the most liquid F&amp;O stocks by 5-day average volume…", "#7c83fd")
+liquid_tickers = get_liquid_tickers()
+_liq_slot.empty()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_fund_map(tickers):
     fund_df = fetch_bulk_fundamentals(tickers)
     if fund_df.empty:
         return {}
     return {row["ticker"]: row.to_dict() for _, row in fund_df.iterrows()}
 
+_fund_slot = show_loading("Loading fundamental data — PE, ROE, debt ratios for quality filters…", "#7c83fd")
 fund_map = get_fund_map(tuple(liquid_tickers))
+_fund_slot.empty()
 
 # ── CACHED SIGNAL SCAN — 5-min TTL ────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
@@ -214,8 +217,9 @@ with st.sidebar:
 if refresh_btn:
     _cached_intraday_scan.clear()
 
-with st.spinner(f"Scanning {len(liquid_tickers)} liquid stocks…"):
-    result  = _cached_intraday_scan(tuple(liquid_tickers), fund_map)
+_scan_slot = show_loading(f"Scanning {len(liquid_tickers)} liquid stocks for intraday breakouts, momentum, and VWAP setups…", "#f0b429")
+result = _cached_intraday_scan(tuple(liquid_tickers), fund_map)
+_scan_slot.empty()
 signals     = result["signals"]
 scanned_at  = result.get("scanned_at", time.time())
 

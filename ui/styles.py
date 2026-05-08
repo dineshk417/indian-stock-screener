@@ -380,6 +380,24 @@ def inject_global_css() -> None:
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
+def show_loading(message: str, color: str = "#7c83fd"):
+    """Show an animated pulsing loading banner.  Call .empty() on the returned slot to dismiss."""
+    slot = st.empty()
+    r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    slot.markdown(
+        f'<div style="background:rgba({r},{g},{b},0.06);'
+        f'border:1px solid rgba({r},{g},{b},0.2);'
+        f'border-radius:12px;padding:13px 18px;'
+        f'display:flex;align-items:center;gap:12px;margin-bottom:16px;">'
+        f'<div style="width:8px;height:8px;border-radius:50%;background:{color};'
+        f'animation:pulse 1.2s ease-in-out infinite;flex-shrink:0;"></div>'
+        f'<div style="color:{color};font-weight:600;font-size:0.85rem;">{message}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    return slot
+
+
 def page_header(
     title: str,
     subtitle: str = "",

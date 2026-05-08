@@ -10,7 +10,7 @@ from analysis.technical import compute_indicators
 from analysis.sentiment import analyze_market_sentiment
 from signals.swing_signals import generate_swing_signals
 from ui.components import signal_card
-from ui.styles import page_header
+from ui.styles import page_header, show_loading
 from ui.charts import candlestick_chart, rsi_macd_chart
 from config.stock_universe import NIFTY_50, NIFTY_200
 
@@ -67,7 +67,7 @@ with st.sidebar:
 """)
 
 # ── SENTIMENT ──────────────────────────────────────────────────────────────────
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_sentiment_score():
     news   = fetch_market_news()
     result = analyze_market_sentiment(
@@ -76,10 +76,12 @@ def get_sentiment_score():
     )
     return result.get("overall_sentiment", 5) / 10
 
+_sent_slot = show_loading("Analysing latest market news for sentiment score…", "#7c83fd")
 try:
     sentiment_score = get_sentiment_score()
 except Exception:
     sentiment_score = 0.5
+_sent_slot.empty()
 
 # ── CACHED SCAN — cross-session 30-min TTL ─────────────────────────────────────
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -142,8 +144,9 @@ if run_btn or "swing_signals" not in st.session_state or _universe_changed:
         scan_slot.empty()
     else:
         # Cold session start or universe change — try cross-session cache first
-        with st.spinner(f"Scanning {len(tickers)} stocks…"):
-            result = _cached_swing_scan(tickers_key, round(sentiment_score, 2))
+        _scan_slot = show_loading(f"Running swing signal scan across {len(tickers)} stocks — checking RSI, MACD, Supertrend, volume…", "#f0b429")
+        result = _cached_swing_scan(tickers_key, round(sentiment_score, 2))
+        _scan_slot.empty()
         signals = result["signals"]
         st.session_state.swing_scan_ts = result.get("scanned_at", time.time())
 

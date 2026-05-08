@@ -20,7 +20,7 @@ from data.smart_money import (
 from config.stock_universe import NIFTY_50
 
 st.set_page_config(page_title="Smart Money · ShareSaathi", layout="wide", page_icon="🏦")
-from ui.styles import inject_global_css, page_header
+from ui.styles import inject_global_css, page_header, show_loading
 inject_global_css()
 
 page_header(
@@ -148,9 +148,10 @@ def _kpi_card(label: str, value: str, sub: str = "", color: str = "#f1f5f9") -> 
 # ║  TAB 1 — BULK & BLOCK DEALS                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_deals:
-    with st.spinner("Loading bulk & block deals…"):
-        bulk_df  = fetch_bulk_deals(days_back)
-        block_df = fetch_block_deals(days_back)
+    _bd_slot = show_loading("Reading bulk &amp; block deal data from cache — last 30 days of NSE trade disclosures…", "#f0b429")
+    bulk_df  = fetch_bulk_deals(days_back)
+    block_df = fetch_block_deals(days_back)
+    _bd_slot.empty()
 
     # Combine bulk + block
     frames = [df for df in (bulk_df, block_df) if not df.empty]
@@ -257,8 +258,9 @@ with tab_deals:
 # ║  TAB 2 — FII / DII FLOW                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_flow:
-    with st.spinner("Loading FII/DII flow…"):
-        flow_df = fetch_fii_dii_flow(days_back)
+    _fii_slot = show_loading("Loading FII &amp; DII daily net flow data — foreign vs domestic institutional buying…", "#00c896")
+    flow_df = fetch_fii_dii_flow(days_back)
+    _fii_slot.empty()
 
     if flow_df.empty:
         _empty(
@@ -373,8 +375,9 @@ with tab_flow:
 # ║  TAB 3 — INSIDER / PROMOTER TRADES                                          ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_insider:
-    with st.spinner("Loading insider trades…"):
-        insider_df = fetch_insider_trades(days_back)
+    _ins_slot = show_loading("Loading insider &amp; promoter trade disclosures (SEBI PIT regulations)…", "#7c83fd")
+    insider_df = fetch_insider_trades(days_back)
+    _ins_slot.empty()
 
     if insider_df.empty:
         _empty(
@@ -448,8 +451,9 @@ with tab_holders:
 
     _n50_tickers = tuple(NIFTY_50.values())
 
-    with st.spinner("Fetching institutional holders for Nifty 50…"):
-        holders_df = fetch_institutional_holders(_n50_tickers)
+    _inst_slot = show_loading("Fetching latest institutional holder data for Nifty 50 stocks via Yahoo Finance…", "#7c83fd")
+    holders_df = fetch_institutional_holders(_n50_tickers)
+    _inst_slot.empty()
 
     if holders_df.empty:
         _empty(

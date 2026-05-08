@@ -8,7 +8,7 @@ import hashlib
 import streamlit as st
 
 st.set_page_config(page_title="Tip Analyzer · ShareSaathi", layout="wide", page_icon="🔍")
-from ui.styles import inject_global_css; inject_global_css()
+from ui.styles import inject_global_css, show_loading; inject_global_css()
 
 # ── Page header (no <style> block — animations are in ui/styles.py) ────────────
 st.markdown(
@@ -103,22 +103,25 @@ tip_hash = hashlib.md5((tip_text or "").strip().encode()).hexdigest()
 cache_key = f"tip_result_{tip_hash}"
 
 if cache_key not in st.session_state:
-    with st.spinner("Step 1/3 — Parsing tip…"):
-        parsed = parse_tip(tip_text.strip())
+    _s1 = show_loading("Step 1 of 3 — Extracting ticker, entry, stop-loss, and target from tip text…", "#7c83fd")
+    parsed = parse_tip(tip_text.strip())
+    _s1.empty()
 
     if "error" in parsed:
         st.error(f"Could not parse tip: {parsed['error']}")
         st.stop()
 
-    with st.spinner("Step 2/3 — Fetching market data and scoring…"):
-        analysis = analyze_tip(parsed)
+    _s2 = show_loading("Step 2 of 3 — Fetching live price, technical indicators, and fundamental scores…", "#f0b429")
+    analysis = analyze_tip(parsed)
+    _s2.empty()
 
     if "error" in analysis:
         st.error(f"Analysis failed: {analysis['error']}")
         st.stop()
 
-    with st.spinner("Step 3/3 — Getting AI verdict…"):
-        ai_verdict = get_ai_verdict(parsed, analysis)
+    _s3 = show_loading("Step 3 of 3 — Getting AI verdict on risk/reward, quality, and entry timing…", "#00c896")
+    ai_verdict = get_ai_verdict(parsed, analysis)
+    _s3.empty()
 
     st.session_state[cache_key] = {
         "parsed": parsed,

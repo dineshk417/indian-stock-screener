@@ -26,7 +26,7 @@ except Exception as _exc:
     _import_error = _tb.format_exc()
 
 st.set_page_config(page_title="Signal Log · ShareSaathi", layout="wide", page_icon="📋")
-from ui.styles import inject_global_css, page_header; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
 @st.cache_data(ttl=600)
@@ -206,16 +206,18 @@ with hcol2:
 
 # ── Run Scan ───────────────────────────────────────────────────────────────────
 if _run_scan:
-    with st.spinner("Generating signals…"):
-        try:
-            from signals.swing_signals import generate_swing_signals
-            from config.stock_universe import NIFTY_50
-            tickers = list(NIFTY_50.values())
-            new_sigs = generate_swing_signals(tickers, use_cache=False)
-            n_new    = sum(1 for s in new_sigs)
-            st.success(f"Scan complete — {len(new_sigs)} swing signal(s) generated, {n_new} logged.")
-        except Exception as _e:
-            st.error(f"Scan error: {_e}")
+    _gen_slot = show_loading("Running full Nifty 50 technical scan — RSI, MACD, Supertrend, volume anomalies…", "#f0b429")
+    try:
+        from signals.swing_signals import generate_swing_signals
+        from config.stock_universe import NIFTY_50
+        tickers = list(NIFTY_50.values())
+        new_sigs = generate_swing_signals(tickers, use_cache=False)
+        n_new    = sum(1 for s in new_sigs)
+        _gen_slot.empty()
+        st.success(f"Scan complete — {len(new_sigs)} swing signal(s) generated, {n_new} logged.")
+    except Exception as _e:
+        _gen_slot.empty()
+        st.error(f"Scan error: {_e}")
 
         if _mkt_live:
             try:
@@ -384,32 +386,35 @@ with tab_live:
     _check_col, _dedup_col, _ = st.columns([1, 1, 2])
     with _check_col:
         if st.button("🔄 Check Outcomes Now", use_container_width=True):
-            with st.spinner("Resolving…"):
-                try:
-                    from signals.outcome_tracker import update_open_signal_outcomes
-                    _n = update_open_signal_outcomes(position_size_inr=float(position_size))
-                    st.session_state["_last_resolve_ts"] = time.time()
-                    if _n:
-                        st.success(f"Resolved {_n} signal(s).")
-                        st.rerun()
-                    else:
-                        st.info("Nothing resolved — all signals still active.")
-                except Exception as _e:
-                    st.error(str(_e))
+            _res_slot = show_loading("Fetching live prices and checking SL/T1/T2 hits for all open signals…", "#00c896")
+            try:
+                from signals.outcome_tracker import update_open_signal_outcomes
+                _n = update_open_signal_outcomes(position_size_inr=float(position_size))
+                _res_slot.empty()
+                st.session_state["_last_resolve_ts"] = time.time()
+                if _n:
+                    st.success(f"Resolved {_n} signal(s).")
+                    st.rerun()
+                else:
+                    st.info("Nothing resolved — all signals still active.")
+            except Exception as _e:
+                _res_slot.empty()
+                st.error(str(_e))
 
     with _dedup_col:
         _dup_count = log.get_duplicate_count()
         _btn_label = f"🧹 Fix Duplicates ({_dup_count} extra rows)" if _dup_count > 0 else "✅ No Duplicates"
         if st.button(_btn_label, use_container_width=True, disabled=(_dup_count == 0)):
-            with st.spinner("Removing duplicates…"):
-                _removed = log.purge_duplicates()
-                if _removed > 0:
-                    st.success(f"Removed {_removed} duplicate row(s). Refreshing…")
-                    st.rerun()
-                elif _removed == 0:
-                    st.info("No duplicates found.")
-                else:
-                    st.error("Dedup failed — check logs.")
+            _dup_slot = show_loading("Removing duplicate open positions, keeping the most recent per ticker…", "#7c83fd")
+            _removed = log.purge_duplicates()
+            _dup_slot.empty()
+            if _removed > 0:
+                st.success(f"Removed {_removed} duplicate row(s). Refreshing…")
+                st.rerun()
+            elif _removed == 0:
+                st.info("No duplicates found.")
+            else:
+                st.error("Dedup failed — check logs.")
 
     # Filter open signals by sidebar timeframe AND period
     _cutoff_date = (_dt.date.today() - _dt.timedelta(days=days_back)).isoformat()

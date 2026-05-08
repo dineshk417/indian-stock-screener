@@ -33,7 +33,7 @@ def _live_quote(ticker: str) -> dict:
 
 # ── Page shell ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Market Overview · ShareSaathi", layout="wide", page_icon="📊")
-from ui.styles import inject_global_css, page_header; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
 
 page_header("📊 Market Overview", subtitle="NSE · BSE · Live", badge="LIVE", badge_color="#00c896")
 
@@ -83,7 +83,7 @@ for _name, _ticker in main_indices.items():
         hist_1y[_name] = _df
 
 # ── Global Markets (cached, refreshes every 5 min) ────────────────────────────
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def _global_markets_data():
     items = [
         ("S&P 500",   "^GSPC",    False),
@@ -107,7 +107,9 @@ def _global_markets_data():
             continue
     return results
 
+_gm_slot = show_loading("Fetching global markets — S&amp;P 500, Dow, Nasdaq, Crude, Gold, USD/INR…", "#7c83fd")
 _gm = _global_markets_data()
+_gm_slot.empty()
 if _gm:
     st.markdown(
         '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
@@ -345,7 +347,7 @@ st.divider()
 
 # ── Cached helpers for breadth + rotation (expensive — TTL keeps them fresh) ──
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _nifty_breadth_range_data():
     """Batch-fetch 1Y daily for Nifty 50; compute 52W ranges, SMA%, volume ratios."""
     tickers = list(NIFTY_50.values())
@@ -419,7 +421,7 @@ def _nifty_breadth_range_data():
     }
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def _sector_rotation_data():
     """Compute relative strength + momentum for each sector vs Nifty 50 (3M window)."""
     _main = {"Nifty 50", "Bank Nifty", "Sensex"}
@@ -656,7 +658,9 @@ def _market_data():
 _market_data()
 
 # ── Nifty 50 — 52-Week Range Map + Volume Anomalies ──────────────────────────
+_bd_slot = show_loading("Computing 52-week ranges and SMA positions for all Nifty 50 stocks…", "#f0b429")
 _bd_data = _nifty_breadth_range_data()
+_bd_slot.empty()
 if _bd_data and _bd_data.get("stocks"):
     st.divider()
     st.subheader("Nifty 50 — 52-Week Range Map")
