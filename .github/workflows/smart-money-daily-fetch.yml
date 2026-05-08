@@ -36,7 +36,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install requests pandas
+        run: pip install requests pandas lxml openpyxl
 
       - name: Run fetch script
         run: python scripts/fetch_smart_money.py

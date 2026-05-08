@@ -61,7 +61,19 @@ def _get_nse_session() -> requests.Session:
     return _nse_session
 
 
-def _nse_api(path: str, params: dict | None = None) -> dict | list | None:
+def _nse_warm(page_path: str) -> None:
+    """Visit a specific NSE page so its endpoint-specific cookies are set."""
+    sess = _get_nse_session()
+    try:
+        sess.get(f"https://www.nseindia.com/{page_path}", timeout=12)
+        time.sleep(0.8)
+    except Exception as exc:
+        log.debug("NSE warm %s: %s", page_path, exc)
+
+
+def _nse_api(path: str, params: dict | None = None, warm: str | None = None) -> dict | list | None:
+    if warm:
+        _nse_warm(warm)
     sess = _get_nse_session()
     url  = f"https://www.nseindia.com/api/{path}"
     try:
@@ -246,33 +258,52 @@ def _parse_fii_df(df: pd.DataFrame, trade_date: date | None = None) -> list[dict
 
 def fetch_fii_dii_flow() -> list[dict]:
     log.info("Fetching FII/DII flow…")
-    rows: list[dict] = []
 
-    # 1. Per-day archive CSV files
-    for d in _trading_days(min(DAYS_BACK, 20)):
-        url = f"https://nsearchives.nseindia.com/content/fii/fii{d.strftime('%d%m%Y')}.csv"
-        r = _plain_get(url, timeout=10)
-        if r and len(r.content) > 100:
-            try:
-                df = pd.read_csv(io.StringIO(r.text))
-                rows.extend(_parse_fii_df(df, trade_date=d))
-                log.info("  fii: %s ✓", d.isoformat())
-            except Exception as exc:
-                log.debug("  fii: %s parse error: %s", d.isoformat(), exc)
-
-    if rows:
-        log.info("  fii: %d rows total from archive", len(rows))
-        return rows
-
-    # 2. NSE API
-    data = _nse_api("fiidiiTradeReact")
+    # 1. NSE API — warm with the FII/DII reports page first (sets endpoint cookies)
+    data = _nse_api("fiidiiTradeReact", warm="reports/fii-dii")
     if data:
         raw = data.get("data", data) if isinstance(data, dict) else data
         if isinstance(raw, list) and raw:
             df = pd.DataFrame(raw)
             rows = _parse_fii_df(df)
-            log.info("  fii: %d rows from NSE API", len(rows))
-            return rows
+            if rows:
+                log.info("  fii: %d rows from NSE API", len(rows))
+                return rows
+
+    # 2. SEBI FPI statistics HTML page (pd.read_html — needs lxml)
+    try:
+        tables = pd.read_html(
+            "https://www.sebi.gov.in/statistics/fpi-investment/latest.html",
+            flavor="lxml",
+        )
+        for t in tables:
+            # Look for a table that has numeric-ish buy/sell/net columns
+            cols_lower = [str(c).lower() for c in t.columns]
+            if any("buy" in c or "purchas" in c or "net" in c for c in cols_lower) and len(t) >= 2:
+                t.columns = [str(c) for c in t.columns]
+                rows = _parse_fii_df(t)
+                if rows:
+                    log.info("  fii: %d rows from SEBI page", len(rows))
+                    return rows
+    except Exception as exc:
+        log.warning("  fii SEBI fallback: %s", exc)
+
+    # 3. NSE FII/DII archive CSV (some dates exist at a different path)
+    for d in _trading_days(min(DAYS_BACK, 10)):
+        for url_pat in [
+            f"https://nsearchives.nseindia.com/content/fii/fii{d.strftime('%d%m%Y')}.csv",
+            f"https://archives.nseindia.com/content/fii/fii{d.strftime('%d%m%Y')}.xls",
+        ]:
+            r = _plain_get(url_pat, timeout=8)
+            if r and len(r.content) > 100:
+                try:
+                    df = pd.read_csv(io.StringIO(r.text)) if url_pat.endswith(".csv") else pd.read_excel(io.BytesIO(r.content))
+                    rows = _parse_fii_df(df, trade_date=d)
+                    if rows:
+                        log.info("  fii: %d rows from archive %s", len(rows), d.isoformat())
+                        return rows
+                except Exception:
+                    pass
 
     log.warning("  fii: no data from any source")
     return []
@@ -326,39 +357,47 @@ def _normalise_insider(df: pd.DataFrame, col_map: dict) -> list[dict]:
 
 def fetch_insider_trades() -> list[dict]:
     log.info("Fetching insider trades…")
-    today   = date.today()
-    from_dt = (today - timedelta(days=DAYS_BACK)).strftime("%Y-%m-%d")
-    to_dt   = today.strftime("%Y-%m-%d")
+    today    = date.today()
+    from_nse = (today - timedelta(days=DAYS_BACK)).strftime("%d-%m-%Y")
+    to_nse   = today.strftime("%d-%m-%Y")
 
-    # 1. BSE SAST disclosures API
-    url = "https://api.bseindia.com/BseIndiaAPI/api/SAST_Regs_Disclosures/w"
-    r = _plain_get(f"{url}?pageno=1&strSearch=&DateFrom={from_dt}&DateTo={to_dt}&ScripCode=&Category=&Type=")
-    if r:
-        try:
-            data = r.json()
-            rows_raw = data.get("Table", data) if isinstance(data, dict) else data
-            if isinstance(rows_raw, list) and rows_raw:
-                df = pd.DataFrame(rows_raw)
-                rows = _normalise_insider(df, _BSE_INSIDER_COLS)
-                log.info("  insider: %d rows from BSE API", len(rows))
-                return rows
-        except Exception as exc:
-            log.warning("  insider BSE parse: %s", exc)
-
-    # 2. NSE API
-    data = _nse_api("corporates-pit", {
-        "symbol": "", "issuer": "",
-        "from":   (today - timedelta(days=DAYS_BACK)).strftime("%d-%m-%Y"),
-        "to":     today.strftime("%d-%m-%Y"),
-        "type":   "",
-    })
+    # 1. NSE PIT API — warm with corporate-filings page first
+    data = _nse_api(
+        "corporates-pit",
+        params={"symbol": "", "issuer": "", "from": from_nse, "to": to_nse, "type": ""},
+        warm="companies-listing/corporate-filings-insider-trading",
+    )
     if data:
         rows_raw = data.get("data", data) if isinstance(data, dict) else data
         if isinstance(rows_raw, list) and rows_raw:
             df = pd.DataFrame(rows_raw)
             rows = _normalise_insider(df, _NSE_INSIDER_COLS)
-            log.info("  insider: %d rows from NSE API", len(rows))
-            return rows
+            if rows:
+                log.info("  insider: %d rows from NSE API", len(rows))
+                return rows
+
+    # 2. BSE SAST API — try multiple date formats (BSE is inconsistent)
+    bse_url = "https://api.bseindia.com/BseIndiaAPI/api/SAST_Regs_Disclosures/w"
+    for date_fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        from_bse = (today - timedelta(days=DAYS_BACK)).strftime(date_fmt)
+        to_bse   = today.strftime(date_fmt)
+        r = _plain_get(
+            f"{bse_url}?pageno=1&strSearch=&DateFrom={from_bse}&DateTo={to_bse}"
+            f"&ScripCode=&Category=&Type="
+        )
+        if not r:
+            continue
+        try:
+            data = r.json()
+            rows_raw = data.get("Table", data.get("Table1", data)) if isinstance(data, dict) else data
+            if isinstance(rows_raw, list) and rows_raw:
+                df = pd.DataFrame(rows_raw)
+                rows = _normalise_insider(df, _BSE_INSIDER_COLS)
+                if rows:
+                    log.info("  insider: %d rows from BSE API (fmt=%s)", len(rows), date_fmt)
+                    return rows
+        except Exception as exc:
+            log.debug("  insider BSE (%s): %s", date_fmt, exc)
 
     log.warning("  insider: no data from any source")
     return []
