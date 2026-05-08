@@ -1,9 +1,7 @@
 """
 Page 9: Smart Money Tracker
-- Bulk & Block Deals  (NSE Archive CDN — no session/cookies required)
-- FII / DII Daily Flow (NSE Archive per-day CSVs → SEBI page fallback)
-- Insider / Promoter Trades (BSE India API — stateless, cloud-safe)
-- Institutional Holders  (yfinance — top holders for Nifty 50)
+Data is fetched once daily by GitHub Actions (08:30 AM IST) and stored
+in data/smart_money_cache.json.  Streamlit reads the file — no live NSE calls.
 """
 import datetime as _dt
 
@@ -12,6 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from data.smart_money import (
+    cache_updated_at,
     fetch_bulk_deals,
     fetch_block_deals,
     fetch_fii_dii_flow,
@@ -26,10 +25,39 @@ inject_global_css()
 
 page_header(
     "🏦 Smart Money Tracker",
-    subtitle="NSE Archives · BSE API · SEBI · Institutional Activity",
+    subtitle="Bulk & Block · FII/DII Flow · Insider Trades · Holdings",
     badge="DAILY",
     badge_color="#7c83fd",
 )
+
+# ── Cache freshness banner ─────────────────────────────────────────────────────
+_cache_ts = cache_updated_at()
+if _cache_ts is None:
+    st.markdown(
+        '<div style="background:rgba(240,180,41,0.07);border:1px solid rgba(240,180,41,0.25);'
+        'border-left:3px solid #f0b429;border-radius:10px;padding:12px 18px;margin-bottom:16px;">'
+        '<span style="color:#f0b429;font-weight:700;">Data not yet populated · </span>'
+        '<span style="color:#94a3b8;font-size:0.82rem;">'
+        'The daily GitHub Actions job (<code>Smart Money Daily Data Fetch</code>) '
+        'has not run yet. It runs automatically at 8:30 AM IST on trading days. '
+        'You can also trigger it manually from the <b>Actions</b> tab in GitHub.'
+        '</span></div>',
+        unsafe_allow_html=True,
+    )
+else:
+    import pytz as _pytz
+    _IST = _pytz.timezone("Asia/Kolkata")
+    _ts_ist = _cache_ts.astimezone(_IST) if _cache_ts.tzinfo else _cache_ts
+    _age_h  = (_dt.datetime.now(_pytz.utc) - _cache_ts.replace(tzinfo=_pytz.utc) if not _cache_ts.tzinfo else _dt.datetime.now(_pytz.utc) - _cache_ts).seconds // 3600
+    st.markdown(
+        f'<div style="background:rgba(0,200,150,0.05);border:1px solid rgba(0,200,150,0.15);'
+        f'border-left:3px solid #00c896;border-radius:10px;padding:10px 18px;margin-bottom:16px;">'
+        f'<span style="color:#00c896;font-weight:700;">Data as of </span>'
+        f'<span style="color:#e2e8f0;">{_ts_ist.strftime("%d %b %Y %I:%M %p IST")}</span>'
+        f'<span style="color:#475569;font-size:0.78rem;margin-left:10px;">({_age_h}h ago · refreshes daily at 8:30 AM IST)</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -42,11 +70,9 @@ with st.sidebar:
 
     st.divider()
     st.caption(
-        "**Bulk/Block** — NSE Archive CDN (no cookie)\n\n"
-        "**FII/DII** — NSE Archive CSVs per day\n\n"
-        "**Insider** — BSE India API (stateless)\n\n"
-        "**Holdings** — Yahoo Finance\n\n"
-        "Cached 1 hour · All ₹ figures in Crore"
+        "Data fetched once daily by GitHub Actions (8:30 AM IST).\n\n"
+        "Sources: NSE Archive CDN · NSE API · BSE API · Yahoo Finance.\n\n"
+        "All ₹ figures in Crore."
     )
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
@@ -122,8 +148,7 @@ def _kpi_card(label: str, value: str, sub: str = "", color: str = "#f1f5f9") -> 
 # ║  TAB 1 — BULK & BLOCK DEALS                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_deals:
-    _source_badge("NSE Archive CDN · nsearchives.nseindia.com · No session required")
-    with st.spinner("Fetching bulk & block deals…"):
+    with st.spinner("Loading bulk & block deals…"):
         bulk_df  = fetch_bulk_deals(days_back)
         block_df = fetch_block_deals(days_back)
 
@@ -206,30 +231,24 @@ with tab_deals:
                            file_name=f"bulk_block_deals_{_dt.date.today()}.csv",
                            mime="text/csv")
     else:
-        _source_unavailable(
-            "NSE Archive",
-            "The archive CDN may be temporarily down. "
-            "Data should return automatically — try refreshing in a few minutes.",
+        _empty(
+            "No deal data in cache",
+            "Run the 'Smart Money Daily Data Fetch' GitHub Actions job to populate the cache.",
         )
-        _empty("No deals found", f"No bulk or block deals in the last {days_back} days.")
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 2 — FII / DII FLOW                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_flow:
-    _source_badge("NSE Archive per-day CSVs → SEBI FPI page fallback")
-    with st.spinner("Fetching FII/DII flow…"):
+    with st.spinner("Loading FII/DII flow…"):
         flow_df = fetch_fii_dii_flow(days_back)
 
     if flow_df.empty:
-        _source_unavailable(
-            "NSE Archive + SEBI fallback",
-            "NSE publishes dated FII CSVs after market close (~4 PM IST). "
-            "SEBI's FPI statistics page is tried as a fallback. "
-            "Both appear temporarily unreachable — try refreshing after market hours.",
+        _empty(
+            "No FII/DII data in cache",
+            "Run the 'Smart Money Daily Data Fetch' GitHub Actions job to populate the cache.",
         )
-        _empty("FII/DII data unavailable", "Data updates daily after market close.")
     else:
         # Separate FII and DII
         _fii = flow_df[flow_df["Category"].str.upper().str.contains("FII|FPI", na=False)] if "Category" in flow_df.columns else pd.DataFrame()
@@ -330,17 +349,14 @@ with tab_flow:
 # ║  TAB 3 — INSIDER / PROMOTER TRADES                                          ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_insider:
-    _source_badge("BSE India API · api.bseindia.com · Stateless / no cookie", color="#00c896")
-    with st.spinner("Fetching SEBI PIT disclosures…"):
+    with st.spinner("Loading insider trades…"):
         insider_df = fetch_insider_trades(days_back)
 
     if insider_df.empty:
-        _source_unavailable(
-            "BSE India API",
-            "BSE's SAST disclosures API returned no data for the selected period. "
-            "Try widening the date range — BSE may have a short delay on new filings.",
+        _empty(
+            "No insider trade data in cache",
+            "Run the 'Smart Money Daily Data Fetch' GitHub Actions job to populate the cache.",
         )
-        _empty("No insider disclosures found", "Try 'Last 60 days' for a wider window.")
     else:
         insider_df = _type_col(insider_df, "Txn")
 

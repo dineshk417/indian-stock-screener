@@ -1,0 +1,53 @@
+name: Smart Money Daily Data Fetch
+
+# Runs at 8:30 AM IST (03:00 UTC) Mon–Fri, just before market opens.
+# Also triggerable manually from the Actions tab.
+#
+# Why GitHub Actions and not the Streamlit scheduler?
+# NSE blocks Streamlit Cloud's IP range for its APIs.
+# GitHub Actions runners use different IPs that are NOT blocked.
+# This job fetches the data and commits a JSON cache file to the repo.
+# The Streamlit app reads from the JSON — zero NSE calls from cloud.
+
+on:
+  schedule:
+    - cron: '0 3 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    name: Fetch Smart Money Data
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install requests pandas
+
+      - name: Run fetch script
+        run: python scripts/fetch_smart_money.py
+
+      - name: Commit cache file
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/smart_money_cache.json
+          git diff --staged --quiet && echo "No changes." || \
+            git commit -m "data: smart money cache $(date -u +'%Y-%m-%d %H:%M UTC')"
+
+      - name: Push
+        run: git push origin main
