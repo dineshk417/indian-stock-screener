@@ -7,7 +7,7 @@ Page 8: Tip Analyzer
 import hashlib
 import streamlit as st
 
-st.set_page_config(page_title="Tip Analyzer · ShareSaathi", layout="wide", page_icon="🔍")
+st.set_page_config(page_title="Tip Analyzer · NiftyEdge", layout="wide", page_icon="🔍")
 from ui.styles import inject_global_css, show_loading; inject_global_css()
 
 # ── Page header (no <style> block — animations are in ui/styles.py) ────────────

@@ -8,7 +8,7 @@ from analysis.technical import compute_indicators, get_technical_summary, detect
 from config.stock_universe import NIFTY_50, NIFTY_200
 from config.settings import RSI_PERIOD
 
-st.set_page_config(page_title="Technical Screener · ShareSaathi", layout="wide", page_icon="📈")
+st.set_page_config(page_title="Technical Screener · NiftyEdge", layout="wide", page_icon="📈")
 from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────

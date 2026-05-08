@@ -19,7 +19,7 @@ from data.smart_money import (
 )
 from config.stock_universe import NIFTY_50
 
-st.set_page_config(page_title="Smart Money · ShareSaathi", layout="wide", page_icon="🏦")
+st.set_page_config(page_title="Smart Money · NiftyEdge", layout="wide", page_icon="🏦")
 from ui.styles import inject_global_css, page_header, show_loading
 inject_global_css()
 

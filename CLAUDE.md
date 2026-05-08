@@ -1,4 +1,4 @@
-# ShareSaathi — Claude Code Project Brief
+# NiftyEdge — Claude Code Project Brief
 
 ## Git Workflow — CRITICAL
 **Always push directly to `main`.** Never create feature branches.

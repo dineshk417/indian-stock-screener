@@ -5,7 +5,7 @@ import streamlit as st
 from data.news_fetcher import fetch_market_news, format_news_for_claude
 from analysis.sentiment import analyze_market_sentiment, has_api_key, get_engine_name
 
-st.set_page_config(page_title="News & Sentiment · ShareSaathi", layout="wide", page_icon="📰")
+st.set_page_config(page_title="News & Sentiment · NiftyEdge", layout="wide", page_icon="📰")
 from ui.styles import inject_global_css, page_header; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 """
-ShareSaathi — Main App (single-page feed)
+NiftyEdge — Main App (single-page feed)
 """
 import logging
 import threading
@@ -69,11 +69,11 @@ def _catchup_signals():
 
 
 st.set_page_config(
-    page_title="ShareSaathi — AI Stock Analysis",
+    page_title="NiftyEdge — AI Stock Analysis",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={"About": "ShareSaathi — AI-powered stock analysis for Indian retail investors."},
+    menu_items={"About": "NiftyEdge — AI-powered stock analysis for Indian retail investors."},
 )
 
 # All st.cache_resource calls MUST come after set_page_config
@@ -690,7 +690,7 @@ st.markdown(
     '<div style="margin-top:32px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05);">'
     '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
     '<span style="color:#374151;font-size:0.72rem;">⚠️ Educational purposes only · Not financial advice</span>'
-    '<span style="color:#1e2535;font-size:0.7rem;">ShareSaathi · yfinance · Claude AI · Streamlit</span>'
+    '<span style="color:#1e2535;font-size:0.7rem;">NiftyEdge · yfinance · Claude AI · Streamlit</span>'
     '</div></div>',
     unsafe_allow_html=True,
 )

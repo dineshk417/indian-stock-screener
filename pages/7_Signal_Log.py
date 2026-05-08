@@ -25,7 +25,7 @@ except Exception as _exc:
     import traceback as _tb
     _import_error = _tb.format_exc()
 
-st.set_page_config(page_title="Signal Log · ShareSaathi", layout="wide", page_icon="📋")
+st.set_page_config(page_title="Signal Log · NiftyEdge", layout="wide", page_icon="📋")
 from ui.styles import inject_global_css, page_header, show_loading; inject_global_css()
 
 # ── Module-level helpers ───────────────────────────────────────────────────────

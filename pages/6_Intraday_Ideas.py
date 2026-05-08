@@ -25,7 +25,7 @@ from config.settings import (
 
 _IST = _pytz.timezone("Asia/Kolkata")
 
-st.set_page_config(page_title="Intraday Ideas · ShareSaathi", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Intraday Ideas · NiftyEdge", layout="wide", page_icon="⚡")
 from ui.styles import inject_global_css; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────

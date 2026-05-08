@@ -27,7 +27,7 @@ _STRATEGY_COLORS = {
     "Supertrend Signal":      "#00c896",
 }
 
-st.set_page_config(page_title="Swing Trades · ShareSaathi", layout="wide", page_icon="💹")
+st.set_page_config(page_title="Swing Trades · NiftyEdge", layout="wide", page_icon="💹")
 from ui.styles import inject_global_css; inject_global_css()
 
 # ── PAGE HEADER ────────────────────────────────────────────────────────────────

@@ -276,7 +276,7 @@ def format_top3_signals(ranked: list) -> str:
     now  = datetime.now(IST).strftime("%d %b %Y %H:%M IST")
     top  = ranked[:3]
     lines = [
-        "⭐ <b>Top 3 Trade Ideas — ShareSaathi</b>",
+        "⭐ <b>Top 3 Trade Ideas — NiftyEdge</b>",
         f"━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {now}\n",
     ]

@@ -1,4 +1,4 @@
-# ShareSaathi — AI-Powered Indian Stock Screener
+# NiftyEdge — AI-Powered Indian Stock Screener
 
 > Real-time trade signals, sentiment analysis, and a trade journal built for the Indian retail investor. Covers Nifty 50 and Nifty 200 across swing and intraday timeframes.
 
@@ -8,7 +8,7 @@
 
 ## What It Does
 
-ShareSaathi is a multi-page Streamlit application that:
+NiftyEdge is a multi-page Streamlit application that:
 
 - Scans Nifty 50 / Nifty 200 stocks against 10 technical and fundamental strategies
 - Generates swing (2–5 day) and intraday (9:15–15:30 IST) trade signals with entry, stop-loss, and two targets
