@@ -338,6 +338,7 @@ def fetch_fii_dii_flow() -> list[dict]:
 # ── Insider Trades ─────────────────────────────────────────────────────────────
 
 _BSE_INSIDER_COLS = {
+    # SAST (Reg 29) column names
     "COMPANY_NAME":        "company",
     "SCRIP_CD":            "symbol",
     "SC_NAME":             "name",
@@ -351,6 +352,30 @@ _BSE_INSIDER_COLS = {
     "INTIMDATE":           "disclosed",
     "FROMDATE":            "from_date",
     "TODATE":              "to_date",
+    # BSE PIT insider trading column name variants
+    "ScripName":           "company",
+    "ScripCode":           "symbol",
+    "PersonName":          "person",
+    "Category":            "category",
+    "TransType":           "txn",
+    "NoOfSecurities":      "shares",
+    "ValueOfSecurities":   "value",
+    "AcqBeforeMode":       "before_pct",
+    "AcqAfterMode":        "after_pct",
+    "IntimDate":           "disclosed",
+    "FromDate":            "from_date",
+    "ToDate":              "to_date",
+    # Additional lowercase variants
+    "companyname":         "company",
+    "scripcode":           "symbol",
+    "personname":          "person",
+    "categoryofperson":    "category",
+    "typeoftransaction":   "txn",
+    "noofsecurities":      "shares",
+    "valueofsecurities":   "value",
+    "intimdate":           "disclosed",
+    "fromdate":            "from_date",
+    "todate":              "to_date",
 }
 
 _NSE_INSIDER_COLS = {
@@ -381,52 +406,101 @@ def _normalise_insider(df: pd.DataFrame, col_map: dict) -> list[dict]:
     return df.where(pd.notna(df), None).to_dict("records")
 
 
+def _try_bse_insider(endpoint: str, from_dt: date, to_dt: date) -> list[dict]:
+    """Try one BSE API endpoint for insider/SAST data. Returns rows or []."""
+    base = f"https://api.bseindia.com/BseIndiaAPI/api/{endpoint}/w"
+    for date_fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        from_bse = from_dt.strftime(date_fmt)
+        to_bse   = to_dt.strftime(date_fmt)
+        url = f"{base}?pageno=1&strSearch=&DateFrom={from_bse}&DateTo={to_bse}&ScripCode=&Category=&Type="
+        r = _bse_get(url)
+        if not r:
+            log.info("  insider BSE %s (%s): no response (HTTP error or timeout)", endpoint, date_fmt)
+            continue
+        try:
+            j = r.json()
+            log.info("  insider BSE %s (%s): status=%s keys=%s",
+                     endpoint, date_fmt, r.status_code,
+                     list(j.keys()) if isinstance(j, dict) else type(j).__name__)
+            rows_raw = (
+                j.get("Table", j.get("Table1", j.get("data", j)))
+                if isinstance(j, dict) else j
+            )
+            if isinstance(rows_raw, list) and rows_raw:
+                log.info("  insider BSE %s: %d rows, sample keys=%s",
+                         endpoint, len(rows_raw), list(rows_raw[0].keys())[:12])
+                df = pd.DataFrame(rows_raw)
+                rows = _normalise_insider(df, _BSE_INSIDER_COLS)
+                if rows:
+                    log.info("  insider: %d rows from BSE %s", len(rows), endpoint)
+                    return rows
+                log.info("  insider BSE %s: normalise returned 0 rows", endpoint)
+            else:
+                log.info("  insider BSE %s (%s): rows_raw empty/wrong type: %s",
+                         endpoint, date_fmt, repr(rows_raw)[:120])
+            break  # got a JSON response — don't retry other date formats
+        except Exception as exc:
+            log.debug("  insider BSE %s (%s): %s", endpoint, date_fmt, exc)
+    return []
+
+
 def fetch_insider_trades() -> list[dict]:
     log.info("Fetching insider trades…")
-    today    = date.today()
-    from_nse = (today - timedelta(days=DAYS_BACK)).strftime("%d-%m-%Y")
+    today   = date.today()
+    from_dt = today - timedelta(days=DAYS_BACK)
+    from_nse = from_dt.strftime("%d-%m-%Y")
     to_nse   = today.strftime("%d-%m-%Y")
 
-    # 1. NSE PIT API — warm with corporate-filings page first
-    data = _nse_api(
-        "corporates-pit",
-        params={"symbol": "", "issuer": "", "from": from_nse, "to": to_nse, "type": ""},
-        warm="companies-listing/corporate-filings-insider-trading",
-    )
-    if data:
+    # 1. NSE PIT API (Prohibition of Insider Trading disclosures)
+    _nse_warm("companies-listing/corporate-filings-insider-trading")
+    time.sleep(1.5)   # give cookies more time to settle
+    data = _nse_api("corporates-pit",
+                    params={"symbol": "", "issuer": "", "from": from_nse, "to": to_nse, "type": ""})
+    if data is not None:
+        log.info("  insider NSE response type=%s keys=%s",
+                 type(data).__name__,
+                 list(data.keys()) if isinstance(data, dict) else "—")
         rows_raw = data.get("data", data) if isinstance(data, dict) else data
         if isinstance(rows_raw, list) and rows_raw:
+            log.info("  insider NSE: %d rows, sample keys=%s",
+                     len(rows_raw), list(rows_raw[0].keys())[:12])
             df = pd.DataFrame(rows_raw)
             rows = _normalise_insider(df, _NSE_INSIDER_COLS)
             if rows:
                 log.info("  insider: %d rows from NSE API", len(rows))
                 return rows
+        else:
+            log.warning("  insider NSE: rows_raw=%s", repr(rows_raw)[:200])
+    else:
+        log.warning("  insider NSE: API returned None (blocked or timeout)")
 
-    # 2. BSE SAST API — requires BSE-specific Origin/Referer headers
-    bse_url = "https://api.bseindia.com/BseIndiaAPI/api/SAST_Regs_Disclosures/w"
-    for date_fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
-        from_bse = (today - timedelta(days=DAYS_BACK)).strftime(date_fmt)
-        to_bse   = today.strftime(date_fmt)
-        r = _bse_get(
-            f"{bse_url}?pageno=1&strSearch=&DateFrom={from_bse}&DateTo={to_bse}"
-            f"&ScripCode=&Category=&Type="
-        )
-        if not r:
-            continue
-        try:
-            data = r.json()
-            log.info("  insider BSE raw keys: %s", list(data.keys()) if isinstance(data, dict) else type(data))
-            rows_raw = data.get("Table", data.get("Table1", data)) if isinstance(data, dict) else data
-            if isinstance(rows_raw, list) and rows_raw:
-                df = pd.DataFrame(rows_raw)
-                rows = _normalise_insider(df, _BSE_INSIDER_COLS)
+    # 2. BSE PIT insider trading (SEBI PIT Regulations — the actual insider trades)
+    for endpoint in ("InsiderTrading", "Insider_Trading"):
+        rows = _try_bse_insider(endpoint, from_dt, today)
+        if rows:
+            return rows
+
+    # 3. BSE SAST (Substantial Acquisition disclosures — related but not insider trades)
+    rows = _try_bse_insider("SAST_Regs_Disclosures", from_dt, today)
+    if rows:
+        return rows
+
+    # 4. NSE archive CSV (no cookies needed — static file)
+    for csv_url in [
+        "https://nsearchives.nseindia.com/corporates/insiderTrading.csv",
+        "https://nsearchives.nseindia.com/corporates/pit/pitDisclosures.csv",
+    ]:
+        r = _plain_get(csv_url, timeout=12)
+        if r and len(r.content) > 200:
+            try:
+                df = pd.read_csv(io.StringIO(r.text))
+                log.info("  insider archive CSV cols: %s", list(df.columns)[:12])
+                rows = _normalise_insider(df, _NSE_INSIDER_COLS)
                 if rows:
-                    log.info("  insider: %d rows from BSE API (fmt=%s)", len(rows), date_fmt)
+                    log.info("  insider: %d rows from NSE archive %s", len(rows), csv_url)
                     return rows
-            else:
-                log.info("  insider BSE (%s): empty rows_raw", date_fmt)
-        except Exception as exc:
-            log.debug("  insider BSE (%s): %s", date_fmt, exc)
+            except Exception as exc:
+                log.debug("  insider archive CSV %s: %s", csv_url, exc)
 
     log.warning("  insider: no data from any source")
     return []
