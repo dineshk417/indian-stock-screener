@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-05-08T02:52:35.387573+00:00",
+  "updated_at": "2026-05-08T03:33:12.087760+00:00",
   "bulk_block_deals": [
     {
       "date": "2026-05-07",
@@ -1200,27 +1200,12 @@
       "value_cr": 91.68
     }
   ],
-  "fii_dii_flow": [
-    {
-      "category": "DII",
-      "date": "2026-05-07",
-      "buyValue": "17032.05",
-      "sellValue": "16590.98",
-      "netValue": "441.07"
-    },
-    {
-      "category": "FII/FPI",
-      "date": "2026-05-07",
-      "buyValue": "17997.95",
-      "sellValue": "18338.84",
-      "netValue": "-340.89"
-    }
-  ],
+  "fii_dii_flow": [],
   "insider_trades": [],
   "summary": {
     "bulk_count": 98,
     "block_count": 2,
-    "fii_rows": 2,
+    "fii_rows": 0,
     "insider_count": 0
   }
 }
