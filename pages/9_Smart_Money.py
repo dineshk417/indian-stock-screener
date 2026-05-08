@@ -272,7 +272,9 @@ with tab_flow:
 
         # ── KPI strip ────────────────────────────────────────────────────────
         def _net_sum(df: pd.DataFrame) -> float:
-            return float(df["Net ₹Cr"].sum()) if "Net ₹Cr" in df.columns and not df.empty else 0.0
+            if "Net ₹Cr" not in df.columns or df.empty:
+                return 0.0
+            return float(pd.to_numeric(df["Net ₹Cr"], errors="coerce").sum())
 
         fii_net = _net_sum(_fii)
         dii_net = _net_sum(_dii)
@@ -293,8 +295,13 @@ with tab_flow:
 
         # ── Daily bar chart ───────────────────────────────────────────────────
         if not _fii.empty and "Date" in _fii.columns and "Net ₹Cr" in _fii.columns:
-            _fii_sorted = _fii.sort_values("Date")
-            _dii_sorted = _dii.sort_values("Date") if not _dii.empty else pd.DataFrame()
+            _fii_sorted = _fii.copy()
+            _fii_sorted["Net ₹Cr"] = pd.to_numeric(_fii_sorted["Net ₹Cr"], errors="coerce")
+            _fii_sorted = _fii_sorted.sort_values("Date")
+            _dii_cp = _dii.copy() if not _dii.empty else pd.DataFrame()
+            if not _dii_cp.empty and "Net ₹Cr" in _dii_cp.columns:
+                _dii_cp["Net ₹Cr"] = pd.to_numeric(_dii_cp["Net ₹Cr"], errors="coerce")
+            _dii_sorted = _dii_cp.sort_values("Date") if not _dii_cp.empty else pd.DataFrame()
 
             fig = go.Figure()
             fig.add_trace(go.Bar(
@@ -329,6 +336,7 @@ with tab_flow:
         # ── Cumulative flow chart ─────────────────────────────────────────────
         if not _fii.empty and "Date" in _fii.columns and "Net ₹Cr" in _fii.columns:
             _fii_c = _fii.sort_values("Date").copy()
+            _fii_c["Net ₹Cr"] = pd.to_numeric(_fii_c["Net ₹Cr"], errors="coerce")
             _fii_c["Cumulative"] = _fii_c["Net ₹Cr"].cumsum()
             final = float(_fii_c["Cumulative"].iloc[-1])
             lc = "#00c896" if final >= 0 else "#ff4d6d"
