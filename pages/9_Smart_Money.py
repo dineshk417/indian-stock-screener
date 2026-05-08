@@ -155,7 +155,23 @@ with tab_deals:
     # Combine bulk + block
     frames = [df for df in (bulk_df, block_df) if not df.empty]
     if frames:
-        combined = pd.concat(frames, ignore_index=True).sort_values("Date", ascending=False)
+        combined = pd.concat(frames, ignore_index=True)
+        # Normalize lowercase column names (guard against stale cache)
+        combined = combined.rename(columns={
+            "date":     "Date",
+            "symbol":   "Symbol",
+            "name":     "Name",
+            "entity":   "Entity",
+            "type":     "Type",
+            "shares":   "Shares",
+            "price":    "Price ₹",
+            "value_cr": "Value ₹ Cr",
+            "category": "Deal",
+        })
+        if "Deal" in combined.columns:
+            combined["Deal"] = combined["Deal"].str.title()
+        if "Date" in combined.columns:
+            combined = combined.sort_values("Date", ascending=False)
     else:
         combined = pd.DataFrame()
 
