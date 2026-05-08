@@ -267,6 +267,7 @@ _SVG = {
     "tech":   '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,14 6,8 10,11 15,5"/><circle cx="15" cy="5" r="1.5" fill="currentColor"/></svg>',
     "globe":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="7"/><line x1="3" y1="10" x2="17" y2="10"/><path d="M10 3c-2.5 2.5-3 4.5-3 7s.5 4.5 3 7c2.5-2.5 3-4.5 3-7s-.5-4.5-3-7z"/></svg>',
     "news":   '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="11" x2="14" y2="11"/><line x1="6" y1="14" x2="10" y2="14"/></svg>',
+    "money":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="5" width="16" height="11" rx="2"/><circle cx="10" cy="10" r="2.5"/><line x1="5" y1="5" x2="5" y2="16"/><line x1="15" y1="5" x2="15" y2="16"/></svg>',
 }
 
 def _nav_card(slug: str, ico: str, title: str, desc: str, col: str, rgb: str) -> str:
@@ -602,9 +603,10 @@ with t_signals:
         unsafe_allow_html=True,
     )
     for _slug, _ico, _title, _desc, _col, _rgb in [
-        ("Swing_Trades",  _SVG["swing"],  "Swing Trades",  "2–5 day setups · 6 strategies · entry, SL & targets", "#00c896", "0,200,150"),
+        ("Smart_Money",   _SVG["money"],  "Smart Money",   "FII/DII flows · Bulk & block deals · Insider trades",  "#f59e0b","245,158,11"),
+        ("Swing_Trades",  _SVG["swing"],  "Swing Trades",  "2–5 day setups · 6 strategies · entry, SL & targets", "#22c55e", "34,197,94"),
         ("Intraday_Ideas",_SVG["intra"],  "Intraday Ideas","ORB · VWAP · EMA crossover · live during market hours","#60a5fa","96,165,250"),
-        ("Signal_Log",    _SVG["log"],    "Signal Journal","Trade log · win rate · P&L · strategy performance",    "#7c83fd","124,131,253"),
+        ("Signal_Log",    _SVG["log"],    "Signal Journal","Trade log · win rate · P&L · strategy performance",    "#8b5cf6","139,92,246"),
     ]:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
@@ -668,9 +670,9 @@ with t_screener:
         unsafe_allow_html=True,
     )
     for _slug, _ico, _title, _desc, _col, _rgb in [
-        ("Fundamental_Screener", _SVG["fund"],  "Fundamental Screener","PE · ROE · Debt/Equity · Dividend Yield · Margins","#f0b429","240,180,41"),
-        ("Technical_Screener",   _SVG["tech"],  "Technical Screener",  "RSI · MACD · Golden Cross · Volume Breakout",       "#60a5fa","96,165,250"),
-        ("Market_Overview",      _SVG["globe"], "Market Overview",     "Live indices · Sector heatmap · Breadth · Movers",  "#00c896","0,200,150"),
+        ("Technical_Screener",   _SVG["tech"],  "Technical Screener",  "RSI · MACD · Golden Cross · Volume Breakout",       "#3b82f6","59,130,246"),
+        ("Fundamental_Screener", _SVG["fund"],  "Fundamental Screener","PE · ROE · Debt/Equity · Dividend Yield · Margins","#f59e0b","245,158,11"),
+        ("Market_Overview",      _SVG["globe"], "Market Overview",     "Live indices · Sector heatmap · Breadth · Movers",  "#22c55e","34,197,94"),
     ]:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
