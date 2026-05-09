@@ -20,7 +20,7 @@ from data.smart_money import (
 from config.stock_universe import NIFTY_50
 
 st.set_page_config(page_title="Smart Money · NiftyEdge", layout="wide", page_icon="🏦")
-from ui.styles import inject_global_css, page_header, show_loading
+from ui.styles import inject_global_css, page_header, show_loading, theme_toggle
 inject_global_css()
 
 page_header(
