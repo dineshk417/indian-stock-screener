@@ -39,7 +39,7 @@ _CSS = """
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
-html, body, [class*="css"], .stMarkdown, .stText, p, span, div {
+html, body, [class*="css"], .stMarkdown, .stText, p {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
     -webkit-font-smoothing: antialiased !important;
 }
@@ -608,3 +608,97 @@ def page_header(
         f'margin-bottom:24px;border-radius:1px;margin-top:10px;"></div>',
         unsafe_allow_html=True,
     )
+
+
+def auth_guard() -> None:
+    """Show a login page and stop execution if the user is not authenticated.
+
+    No-op when auth is not configured in secrets (backward compatible for local dev).
+    """
+    try:
+        _auth_on = bool(st.secrets.get("auth"))
+    except Exception:
+        _auth_on = False
+
+    if not _auth_on or st.user.is_logged_in:
+        return
+
+    st.markdown(
+        '<div style="min-height:55vh;display:flex;align-items:center;justify-content:center;">'
+        '<div style="text-align:center;max-width:400px;width:100%;">'
+        '<div style="font-size:2.4rem;font-weight:900;letter-spacing:-0.05em;'
+        'color:#e2e8f0;margin-bottom:4px;">'
+        'Nifty<span style="background:linear-gradient(135deg,#3b82f6,#22c55e);'
+        '-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Edge</span></div>'
+        '<div style="color:#4b5a72;font-size:0.68rem;font-weight:700;'
+        'letter-spacing:0.13em;margin-bottom:36px;">AI-POWERED NSE / BSE ANALYSIS</div>'
+        '<div style="background:linear-gradient(145deg,#0c1422,#111d2e);'
+        'border:1px solid rgba(255,255,255,0.07);border-radius:20px;'
+        'padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:left;">'
+        '<div style="font-size:1.05rem;font-weight:700;color:#e2e8f0;margin-bottom:10px;">'
+        '🔐 Sign in to continue</div>'
+        '<div style="color:#4b5a72;font-size:0.8rem;line-height:1.7;">'
+        'Access smart money flows · FII/DII data · Swing &amp; intraday signals · '
+        'Your personal trade journal.</div>'
+        '</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    _, _btn_col, _ = st.columns([1, 1.5, 1])
+    with _btn_col:
+        st.button(
+            "Continue with Google →",
+            on_click=st.login,
+            args=["google"],
+            type="primary",
+            use_container_width=True,
+            key="ne_login_btn",
+        )
+        st.markdown(
+            '<p style="color:#374151;font-size:0.65rem;text-align:center;margin-top:2px;">'
+            'Secure · Google OAuth 2.0</p>',
+            unsafe_allow_html=True,
+        )
+    st.stop()
+
+
+def user_sidebar() -> None:
+    """Compact user profile card + logout button. Call inside a sidebar block."""
+    try:
+        if not st.user.is_logged_in:
+            return
+    except Exception:
+        return
+
+    name   = getattr(st.user, "name",    "") or ""
+    email  = getattr(st.user, "email",   "") or ""
+    avatar = getattr(st.user, "picture", "") or ""
+
+    if avatar:
+        avatar_html = (
+            f'<img src="{avatar}" style="width:34px;height:34px;border-radius:50%;'
+            f'object-fit:cover;border:2px solid rgba(59,130,246,0.3);flex-shrink:0;" />'
+        )
+    else:
+        initial = (name[:1] or email[:1] or "U").upper()
+        avatar_html = (
+            f'<div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;'
+            f'background:linear-gradient(135deg,#3b82f6,#22c55e);'
+            f'display:flex;align-items:center;justify-content:center;'
+            f'font-size:0.85rem;font-weight:700;color:#fff;">{initial}</div>'
+        )
+
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:9px;'
+        f'background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.14);'
+        f'border-radius:12px;padding:9px 11px;margin-bottom:6px;">'
+        f'{avatar_html}'
+        f'<div style="min-width:0;flex:1;">'
+        f'<div style="font-size:0.8rem;font-weight:700;color:#e2e8f0;'
+        f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{name or "User"}</div>'
+        f'<div style="font-size:0.62rem;color:#4b5a72;'
+        f'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{email}</div>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Sign out", key="ne_signout"):
+        st.logout()
