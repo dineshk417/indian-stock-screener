@@ -20,8 +20,9 @@ from data.smart_money import (
 from config.stock_universe import NIFTY_50
 
 st.set_page_config(page_title="Smart Money · NiftyEdge", layout="wide", page_icon="🏦")
-from ui.styles import inject_global_css, page_header, show_loading, theme_toggle
+from ui.styles import inject_global_css, page_header, show_loading, theme_toggle, auth_guard, user_sidebar
 inject_global_css()
+auth_guard()
 
 page_header(
     "🏦 Smart Money Tracker",
@@ -30,7 +31,7 @@ page_header(
     badge_color="#7c83fd",
 )
 
-# ── Cache freshness banner ─────────────────────────────────────────────────────
+# ── Cache freshness banner ────────────────────────────────────────────────────────────
 _cache_ts = cache_updated_at()
 if _cache_ts is None:
     st.markdown(
@@ -59,7 +60,7 @@ else:
         unsafe_allow_html=True,
     )
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
     period_opt = st.selectbox("Period", ["Last 7 days", "Last 15 days", "Last 30 days", "Last 60 days"])
@@ -77,16 +78,18 @@ with st.sidebar:
 
     st.divider()
     theme_toggle()
-# ── Tabs ───────────────────────────────────────────────────────────────────────
+    st.divider()
+    user_sidebar()
+# ── Tabs ───────────────────────────────────────────────────────────────────
 tab_deals, tab_flow, tab_insider, tab_holders = st.tabs([
     "📦 Bulk & Block Deals",
     "🌊 FII / DII Flow",
     "🔏 Insider Trades",
-    "🏛 Top Holders",
+    "🏙 Top Holders",
 ])
 
 
-# ── Helper: styled empty state ──────────────────────────────────────────────────
+# ── Helper: styled empty state ───────────────────────────────────────────────────────
 def _empty(msg: str, sub: str = ""):
     st.markdown(
         f'<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);'
@@ -159,7 +162,6 @@ with tab_deals:
     frames = [df for df in (bulk_df, block_df) if not df.empty]
     if frames:
         combined = pd.concat(frames, ignore_index=True)
-        # Normalize lowercase column names (guard against stale cache)
         combined = combined.rename(columns={
             "date":     "Date",
             "symbol":   "Symbol",
@@ -181,7 +183,6 @@ with tab_deals:
     if not combined.empty:
         combined = _type_col(combined, "Type")
 
-    # ── Stats strip ──────────────────────────────────────────────────────────
     if not combined.empty:
         _n_bulk    = int((combined["Deal"] == "Bulk").sum())
         _n_block   = int((combined["Deal"] == "Block").sum())
@@ -199,13 +200,11 @@ with tab_deals:
             unsafe_allow_html=True,
         )
 
-        # ── Stock filter ─────────────────────────────────────────────────────
         all_symbols = sorted(combined["Symbol"].dropna().unique()) if "Symbol" in combined.columns else []
         sel_symbols = st.multiselect("Filter by Stock", all_symbols, placeholder="All stocks")
         if sel_symbols:
             combined = combined[combined["Symbol"].isin(sel_symbols)]
 
-        # ── Deal cards ───────────────────────────────────────────────────────
         st.markdown(
             '<div style="font-size:0.72rem;font-weight:700;color:#64748b;'
             'text-transform:uppercase;letter-spacing:0.09em;margin-bottom:10px;">'
@@ -270,11 +269,9 @@ with tab_flow:
             "Run the 'Smart Money Daily Data Fetch' GitHub Actions job to populate the cache.",
         )
     else:
-        # Separate FII and DII
         _fii = flow_df[flow_df["Category"].str.upper().str.contains("FII|FPI", na=False)] if "Category" in flow_df.columns else pd.DataFrame()
         _dii = flow_df[flow_df["Category"].str.upper().str.contains("DII", na=False)] if "Category" in flow_df.columns else pd.DataFrame()
 
-        # ── KPI strip ────────────────────────────────────────────────────────
         def _net_sum(df: pd.DataFrame) -> float:
             if "Net ₹Cr" not in df.columns or df.empty:
                 return 0.0
@@ -297,7 +294,6 @@ with tab_flow:
             unsafe_allow_html=True,
         )
 
-        # ── Daily bar chart ───────────────────────────────────────────────────
         if not _fii.empty and "Date" in _fii.columns and "Net ₹Cr" in _fii.columns:
             _fii_sorted = _fii.copy()
             _fii_sorted["Net ₹Cr"] = pd.to_numeric(_fii_sorted["Net ₹Cr"], errors="coerce")
@@ -337,7 +333,6 @@ with tab_flow:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # ── Cumulative flow chart ─────────────────────────────────────────────
         if not _fii.empty and "Date" in _fii.columns and "Net ₹Cr" in _fii.columns:
             _fii_c = _fii.sort_values("Date").copy()
             _fii_c["Net ₹Cr"] = pd.to_numeric(_fii_c["Net ₹Cr"], errors="coerce")
@@ -365,7 +360,6 @@ with tab_flow:
             )
             st.plotly_chart(fig2, use_container_width=True)
 
-        # ── Raw table ─────────────────────────────────────────────────────────
         with st.expander("Raw Daily Data"):
             show = flow_df.copy()
             if "Date" in show.columns:
@@ -389,7 +383,6 @@ with tab_insider:
     else:
         insider_df = _type_col(insider_df, "Txn")
 
-        # ── KPIs ─────────────────────────────────────────────────────────────
         _n_buy  = int(insider_df["Txn"].str.upper().str.contains("BUY|ACQUI", na=False).sum()) if "Txn" in insider_df.columns else 0
         _n_sell = len(insider_df) - _n_buy
         _val    = insider_df["Value ₹ Cr"].sum() if "Value ₹ Cr" in insider_df.columns else 0
@@ -403,14 +396,12 @@ with tab_insider:
             unsafe_allow_html=True,
         )
 
-        # ── Category filter ──────────────────────────────────────────────────
         if "Category" in insider_df.columns:
             cats = sorted(insider_df["Category"].dropna().unique())
             sel_cats = st.multiselect("Filter by Category", cats, placeholder="All categories")
             if sel_cats:
                 insider_df = insider_df[insider_df["Category"].isin(sel_cats)]
 
-        # ── Table ────────────────────────────────────────────────────────────
         disp_cols = [c for c in [
             "Disclosed", "Symbol", "Company", "Person", "Category",
             "Txn", "Shares", "Value ₹ Cr", "Before %", "After %", "Mode",
@@ -463,13 +454,11 @@ with tab_holders:
             "yfinance institutional_holders data may not be available for all NSE stocks."
         )
     else:
-        # ── Stock picker ────────────────────────────────────────────────────
         all_tickers = sorted(holders_df["Ticker"].dropna().unique()) if "Ticker" in holders_df.columns else []
         sel_tickers = st.multiselect("Filter by Stock", all_tickers, placeholder="All Nifty 50 stocks")
         if sel_tickers:
             holders_df = holders_df[holders_df["Ticker"].isin(sel_tickers)]
 
-        # ── Top institution summary ──────────────────────────────────────────
         if "Institution" in holders_df.columns and "% Held" in holders_df.columns:
             top_inst = (
                 holders_df.groupby("Institution")["% Held"]
@@ -496,7 +485,6 @@ with tab_holders:
             )
             st.plotly_chart(fig3, use_container_width=True)
 
-        # ── Full table ───────────────────────────────────────────────────────
         disp_cols_h = [c for c in ["Ticker", "Institution", "Shares", "Date", "% Held", "Value $"] if c in holders_df.columns]
         show_h = holders_df[disp_cols_h].copy()
         if "Date" in show_h.columns:

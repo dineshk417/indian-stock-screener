@@ -10,7 +10,7 @@ from analysis.technical import compute_indicators
 from analysis.sentiment import analyze_market_sentiment
 from signals.swing_signals import generate_swing_signals
 from ui.components import signal_card
-from ui.styles import page_header, theme_toggle, show_loading, theme_toggle
+from ui.styles import page_header, theme_toggle, show_loading, auth_guard, user_sidebar
 from ui.charts import candlestick_chart, rsi_macd_chart
 from config.stock_universe import NIFTY_50, NIFTY_200
 
@@ -29,11 +29,12 @@ _STRATEGY_COLORS = {
 
 st.set_page_config(page_title="Swing Trades · NiftyEdge", layout="wide", page_icon="💹")
 from ui.styles import inject_global_css; inject_global_css()
+auth_guard()
 
-# ── PAGE HEADER ────────────────────────────────────────────────────────────────
+# ── PAGE HEADER ─────────────────────────────────────────────────────────────────────
 page_header("💹 Swing Trade Ideas", subtitle="NSE · Equity · 2–5 Day Hold")
 
-# ── SIDEBAR ────────────────────────────────────────────────────────────────────
+# ── SIDEBAR ──────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Settings")
     universe_choice = st.selectbox("Universe", ["Nifty 50", "Nifty 200"])
@@ -68,6 +69,11 @@ with st.sidebar:
 **Supertrend Reversal** — Supertrend flipped bull within 5 bars, MACD bullish
 """)
 
+    st.divider()
+    theme_toggle()
+    st.divider()
+    user_sidebar()
+
 # ── SENTIMENT ──────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_sentiment_score():
@@ -85,7 +91,7 @@ except Exception:
     sentiment_score = 0.5
 _sent_slot.empty()
 
-# ── CACHED SCAN — cross-session 30-min TTL ─────────────────────────────────────
+# ── CACHED SCAN — cross-session 30-min TTL ─────────────────────────────────────────
 @st.cache_data(ttl=1800, show_spinner=False)
 def _cached_swing_scan(tickers_tuple: tuple, sentiment: float) -> dict:
     """Returns {signals: list[dict], scanned_at: float}. Cached 30 min."""
@@ -95,7 +101,6 @@ def _cached_swing_scan(tickers_tuple: tuple, sentiment: float) -> dict:
 tickers_key       = tuple(sorted(tickers))
 _universe_changed = st.session_state.get("swing_universe") != universe_choice
 
-# ── SCAN FACTS (shown during manual refresh progress bar) ─────────────────────
 _SCAN_FACTS = [
     ("📊 RSI & Momentum",      "RSI between 35–65 is the sweet spot for swing entries — not oversold, not overbought. We look for momentum without exhaustion."),
     ("📈 Trend Pullback",      "Best swing trades enter during a pullback within an uptrend. Price above SMA50 and SMA200 confirms the trend; EMA21 is our pullback target."),
@@ -105,10 +110,8 @@ _SCAN_FACTS = [
     ("⚡ Supertrend Reversal", "When Supertrend flips from bearish to bullish and MACD confirms, it often marks the start of a new swing leg — we catch it within 5 bars."),
 ]
 
-# ── SCAN TRIGGER ───────────────────────────────────────────────────────────────
 if run_btn or "swing_signals" not in st.session_state or _universe_changed:
     if run_btn:
-        # Manual refresh: show animated progress bar, clear cross-session cache
         _cached_swing_scan.clear()
         scan_slot = st.empty()
 
@@ -145,7 +148,6 @@ if run_btn or "swing_signals" not in st.session_state or _universe_changed:
             signals = []
         scan_slot.empty()
     else:
-        # Cold session start or universe change — try cross-session cache first
         _scan_slot = show_loading(f"Running swing signal scan across {len(tickers)} stocks — checking RSI, MACD, Supertrend, volume…", "#f0b429")
         result = _cached_swing_scan(tickers_key, round(sentiment_score, 2))
         _scan_slot.empty()
@@ -159,7 +161,6 @@ if run_btn or "swing_signals" not in st.session_state or _universe_changed:
 
 signals = st.session_state.get("swing_signals", [])
 
-# ── LAST SCANNED BADGE ─────────────────────────────────────────────────────────
 _ts = st.session_state.get("swing_scan_ts")
 if _ts:
     import pytz as _tz
@@ -175,7 +176,6 @@ if _ts:
         unsafe_allow_html=True,
     )
 
-# ── STATS STRIP ────────────────────────────────────────────────────────────────
 strategies_active = len(set(s.get("strategy", "") for s in signals))
 sentiment_label   = (
     "Very Bullish" if sentiment_score >= 0.8 else
@@ -230,7 +230,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── STRATEGY BREAKDOWN CHIPS ───────────────────────────────────────────────────
 if signals:
     strategy_counts = Counter(s.get("strategy", "") for s in signals)
     chips = " ".join([
@@ -250,7 +249,6 @@ if signals:
         unsafe_allow_html=True,
     )
 
-# ── FILTERED SIGNALS ───────────────────────────────────────────────────────────
 filtered = [
     s for s in signals
     if (s.get("confidence") or 0) >= min_confidence
@@ -277,7 +275,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── SIGNAL CARDS ───────────────────────────────────────────────────────────────
 for i, sig in enumerate(filtered):
     signal_card(sig)
     strat_color  = _STRATEGY_COLORS.get(sig.get("strategy", ""), "#6b7a99")
@@ -288,7 +285,6 @@ for i, sig in enumerate(filtered):
 
     with st.expander(f"📊 {ticker_short} — Analysis & Chart", expanded=False):
 
-        # ── Score bars ───────────────────────────────────────────────────────
         st.markdown(
             f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'
 
@@ -322,7 +318,6 @@ for i, sig in enumerate(filtered):
             unsafe_allow_html=True,
         )
 
-        # ── Pattern chips ─────────────────────────────────────────────────────
         patterns = sig.get("patterns", [])
         if patterns:
             chips_html = " ".join([
@@ -336,7 +331,6 @@ for i, sig in enumerate(filtered):
                 unsafe_allow_html=True,
             )
 
-        # ── Analysis bullets ──────────────────────────────────────────────────
         reasoning = sig.get("reasoning", "")
         if reasoning:
             parts = [
@@ -359,7 +353,6 @@ for i, sig in enumerate(filtered):
                 unsafe_allow_html=True,
             )
 
-        # ── Live indicator mini-grid + charts ─────────────────────────────────
         df = fetch_single_stock(ticker)
         if df is not None:
             df_ind   = compute_indicators(df)

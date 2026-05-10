@@ -13,7 +13,7 @@ from data.fetcher import fetch_bulk_fundamentals, fetch_stock_data, fetch_single
 from data.market_status import market_status, is_market_open
 from signals.intraday_signals import generate_intraday_signals
 from ui.components import signal_card
-from ui.styles import page_header, theme_toggle, show_loading, theme_toggle
+from ui.styles import page_header, theme_toggle, show_loading, auth_guard, user_sidebar
 from ui.charts import candlestick_chart
 from analysis.technical import compute_indicators
 from config.stock_universe import NIFTY_50
@@ -27,14 +27,15 @@ _IST = _pytz.timezone("Asia/Kolkata")
 
 st.set_page_config(page_title="Intraday Ideas · NiftyEdge", layout="wide", page_icon="⚡")
 from ui.styles import inject_global_css; inject_global_css()
+auth_guard()
 
-# ── PAGE HEADER ────────────────────────────────────────────────────────────────
+# ── PAGE HEADER ─────────────────────────────────────────────────────────────────────
 page_header("⚡ Intraday Trade Ideas", subtitle="NSE · Equity · Intraday",
             badge="LIVE", badge_color="#00c896")
 
 status = market_status()
 
-# ── MARKET STATUS CARD ─────────────────────────────────────────────────────────
+# ── MARKET STATUS CARD ───────────────────────────────────────────────────────────
 if status["is_market_open"]:
     dot_color, label_color, bg = "#00c896", "#00c896", "rgba(0,200,150,0.06)"
     border  = "rgba(0,200,150,0.2)"
@@ -68,7 +69,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── MARKET CLOSED STATE ────────────────────────────────────────────────────────
+# ── MARKET CLOSED STATE ─────────────────────────────────────────────────────────────
 if not status["is_market_open"] and not status["is_pre_market"]:
 
     now_ist   = _dt.datetime.now(_IST)
@@ -175,7 +176,7 @@ if not status["is_market_open"] and not status["is_pre_market"]:
 
     st.stop()
 
-# ── SELECT LIQUID STOCKS ───────────────────────────────────────────────────────
+# ── SELECT LIQUID STOCKS ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=900, show_spinner=False)
 def get_liquid_tickers(n: int = INTRADAY_LIQUID_STOCKS) -> list[str]:
     tickers    = list(NIFTY_50.values())
@@ -216,6 +217,8 @@ with st.sidebar:
 
     st.divider()
     theme_toggle()
+    st.divider()
+    user_sidebar()
 if refresh_btn:
     _cached_intraday_scan.clear()
 
@@ -225,7 +228,6 @@ _scan_slot.empty()
 signals     = result["signals"]
 scanned_at  = result.get("scanned_at", time.time())
 
-# ── LAST SCANNED BADGE ─────────────────────────────────────────────────────────
 _time_str = _dt.datetime.fromtimestamp(scanned_at, _IST).strftime("%H:%M IST")
 _elapsed  = int(time.time() - scanned_at)
 _from_cache = "· from cache" if _elapsed > 30 else ""
@@ -236,7 +238,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── STATS STRIP ────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">'
 
@@ -268,7 +269,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── SIGNALS OR EMPTY STATE ─────────────────────────────────────────────────────
 if not signals:
     st.markdown(
         '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);'
