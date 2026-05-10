@@ -78,6 +78,24 @@ st.set_page_config(
 
 # All st.cache_resource calls MUST come after set_page_config
 _start_scheduler()
+
+from ui.styles import inject_global_css, theme_toggle, auth_guard, user_sidebar
+inject_global_css()
+auth_guard()
+
+# Record the visit once per session (not per page navigation)
+if not st.session_state.get("_ne_visit_recorded"):
+    try:
+        from auth.user_store import upsert_user as _upsert
+        _upsert(
+            st.user.email,
+            getattr(st.user, "name",    "") or "",
+            getattr(st.user, "picture", "") or "",
+        )
+        st.session_state["_ne_visit_recorded"] = True
+    except Exception:
+        pass
+
 try:
     from signals.signal_logger import get_signal_logger as _gl
     _gl().purge_non_trading_day_signals()
@@ -86,12 +104,9 @@ except Exception:
 
 _catchup_signals()
 
-from ui.styles import inject_global_css, theme_toggle
-inject_global_css()
-
 from signals.signal_logger import get_signal_logger
 
-# ── Data helpers (module-level so @st.cache_data hashes reliably) ──────────────
+# ── Data helpers (module-level so @st.cache_data hashes reliably) ──────────────────
 @st.cache_data(ttl=300)
 def _quick_stats():
     try:
@@ -227,7 +242,7 @@ _rgb   = "0,200,150" if is_open else ("240,180,41" if is_pre else "255,77,109")
 _pulse = "animation:pulse 1.4s ease-in-out infinite;" if (is_open or is_pre) else ""
 _now   = _dt.datetime.now(_IST).strftime("%H:%M IST")
 
-# ── TOP HEADER ─────────────────────────────────────────────────────────────────
+# ── TOP HEADER ───────────────────────────────────────────────────────────────────────
 _hdr_col, _tog_col = st.columns([5, 1])
 with _hdr_col:
     st.markdown(
@@ -257,7 +272,7 @@ with _tog_col:
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
     theme_toggle()
 
-# ── SVG ICON LIBRARY (used across tabs) ────────────────────────────────────────
+# ── SVG ICON LIBRARY (used across tabs) ──────────────────────────────────────────────────────
 _SVG = {
     "swing":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="4" height="8" rx="1" fill="rgba(255,255,255,0.1)"/><line x1="5" y1="3" x2="5" y2="6"/><line x1="5" y1="14" x2="5" y2="17"/><rect x="13" y="9" width="4" height="5" rx="1" fill="rgba(255,255,255,0.05)"/><line x1="15" y1="6" x2="15" y2="9"/><line x1="15" y1="14" x2="15" y2="17"/></svg>',
     "intra":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,15 6,8 10,12 15,5"/><polyline points="13,5 15,5 15,7"/></svg>',
@@ -284,14 +299,17 @@ def _nav_card(slug: str, ico: str, title: str, desc: str, col: str, rgb: str) ->
         f'</div></a>'
     )
 
-# ── TABS ────────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    user_sidebar()
+
+# ── TABS ──────────────────────────────────────────────────────────────────────────────
 t_home, t_signals, t_news, t_screener, t_tools = st.tabs([
     "🏠 Home", "💹 Signals", "📰 News", "🔍 Screener", "🛠️ Tools"
 ])
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 1 — HOME                                                               ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚════════════════════════════════════════════════════════════════════════════╝
 with t_home:
 
     # ── BEST TRADES RIGHT NOW (top of page — most actionable content first) ────
@@ -386,7 +404,7 @@ with t_home:
         )
         st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
 
-    # ── MARKET PULSE ───────────────────────────────────────────────────────────
+    # ── MARKET PULSE ──────────────────────────────────────────────────────────────────────
     indices = _hero_indices()
 
     def _vix_sentiment(v):
@@ -472,7 +490,7 @@ with t_home:
 
     st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
 
-    # ── TODAY'S SIGNALS FEED ───────────────────────────────────────────────────
+    # ── TODAY'S SIGNALS FEED ──────────────────────────────────────────────────────────────────
     today_sigs = _today_signals()
     _STRAT_COLORS = {
         "Trend Pullback": "#7c83fd", "Volume Breakout": "#f0b429",
@@ -500,7 +518,7 @@ with t_home:
             f'<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">'
             f'{s["ticker"].replace(".NS","")}</span>'
             f'<span style="font-size:0.6rem;font-weight:700;'
-            f'color:{"#00c896" if s.get("direction")=="LONG" else "#ff4d6d"};">'
+            f'color:{"#00c896" if s.get("direction")=="LONG" else "#ff4d6d"};">'  
             f'{"↑ LONG" if s.get("direction")=="LONG" else "↓ SHORT"}</span>'
             f'</div>'
             f'<div style="font-size:0.65rem;color:{_STRAT_COLORS.get(s.get("strategy",""),"#6b7a99")};'
@@ -528,14 +546,14 @@ with t_home:
     else:
         st.markdown(
             '<div class="feed-card" style="text-align:center;padding:24px;">'
-            '<div style="font-size:1.4rem;margin-bottom:6px;">📭</div>'
+            '<div style="font-size:1.4rem;margin-bottom:6px;">💭</div>'
             '<div style="color:#475569;font-size:0.85rem;">No signals yet today</div>'
             '<div style="color:#374151;font-size:0.75rem;margin-top:4px;">Run a scan from the Signals tab</div>'
             '</div>',
             unsafe_allow_html=True,
         )
 
-    # ── MARKET MOVERS ──────────────────────────────────────────────────────────
+    # ── MARKET MOVERS ──────────────────────────────────────────────────────────────────────
     gainers, losers = _movers()
 
     if gainers or losers:
@@ -571,11 +589,11 @@ with t_home:
         with l_col:
             st.markdown(_mover_card(losers, False), unsafe_allow_html=True)
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 2 — SIGNALS                                                            ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚════════════════════════════════════════════════════════════════════════════╝
 with t_signals:
-    # ── SIGNAL STATS ───────────────────────────────────────────────────────────
+    # ── SIGNAL STATS ──────────────────────────────────────────────────────────────────────
     _qs = _quick_stats()
     _sig_items = [
         ("Today's Signals", str(_qs["today"]),       "new ideas",        "#f0b429", "240,180,41"),
@@ -610,9 +628,9 @@ with t_signals:
     ]:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 3 — NEWS                                                               ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚════════════════════════════════════════════════════════════════════════════╝
 with t_news:
     @st.cache_data(ttl=1800)
     def _home_news():
@@ -660,9 +678,9 @@ with t_news:
         unsafe_allow_html=True,
     )
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 4 — SCREENER                                                           ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚════════════════════════════════════════════════════════════════════════════╝
 with t_screener:
     st.markdown(
         '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
@@ -676,9 +694,9 @@ with t_screener:
     ]:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 5 — TOOLS                                                              ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚════════════════════════════════════════════════════════════════════════════╝
 with t_tools:
     st.markdown(
         '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
@@ -693,7 +711,7 @@ with t_tools:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
 
-# ── FOOTER ─────────────────────────────────────────────────────────────────────
+# ── FOOTER ──────────────────────────────────────────────────────────────────────────────
 st.markdown(
     '<div style="margin-top:32px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05);">'
     '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
