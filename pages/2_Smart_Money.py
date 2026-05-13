@@ -20,7 +20,7 @@ from data.smart_money import (
 from config.stock_universe import NIFTY_50
 
 st.set_page_config(page_title="Smart Money · NiftyEdge", layout="wide", page_icon="🏦")
-from ui.styles import inject_global_css, page_header, show_loading, theme_toggle, auth_guard, user_sidebar
+from ui.styles import inject_global_css, page_header, show_loading, auth_guard, user_sidebar
 inject_global_css()
 auth_guard()
 
@@ -31,7 +31,7 @@ page_header(
     badge_color="#7c83fd",
 )
 
-# ── Cache freshness banner ────────────────────────────────────────────────────────────
+# ── Cache freshness banner ──────────────────────────────────────────────────────────────
 _cache_ts = cache_updated_at()
 if _cache_ts is None:
     st.markdown(
@@ -60,7 +60,7 @@ else:
         unsafe_allow_html=True,
     )
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
     period_opt = st.selectbox("Period", ["Last 7 days", "Last 15 days", "Last 30 days", "Last 60 days"])
@@ -77,19 +77,17 @@ with st.sidebar:
     )
 
     st.divider()
-    theme_toggle()
-    st.divider()
     user_sidebar()
-# ── Tabs ───────────────────────────────────────────────────────────────────
+# ── Tabs ──────────────────────────────────────────────────────────────────────────────
 tab_deals, tab_flow, tab_insider, tab_holders = st.tabs([
     "📦 Bulk & Block Deals",
     "🌊 FII / DII Flow",
     "🔏 Insider Trades",
-    "🏙 Top Holders",
+    "🏗 Top Holders",
 ])
 
 
-# ── Helper: styled empty state ───────────────────────────────────────────────────────
+# ── Helper: styled empty state ─────────────────────────────────────────────────────────
 def _empty(msg: str, sub: str = ""):
     st.markdown(
         f'<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);'
@@ -183,6 +181,7 @@ with tab_deals:
     if not combined.empty:
         combined = _type_col(combined, "Type")
 
+    # ── Stats strip ────────────────────────────────────────────────────────────────────
     if not combined.empty:
         _n_bulk    = int((combined["Deal"] == "Bulk").sum())
         _n_block   = int((combined["Deal"] == "Block").sum())

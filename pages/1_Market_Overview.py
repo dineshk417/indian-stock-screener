@@ -31,9 +31,9 @@ def _live_quote(ticker: str) -> dict:
         return {}
 
 
-# ── Page shell ────────────────────────────────────────────────────────────────
+# ── Page shell ────────────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Market Overview · NiftyEdge", layout="wide", page_icon="📊")
-from ui.styles import inject_global_css, page_header, show_loading, theme_toggle, auth_guard, user_sidebar; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading, auth_guard, user_sidebar; inject_global_css()
 auth_guard()
 
 page_header("📊 Market Overview", subtitle="NSE · BSE · Live", badge="LIVE", badge_color="#00c896")
@@ -85,12 +85,9 @@ for _name, _ticker in main_indices.items():
 
 
 with st.sidebar:
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    theme_toggle()
-    st.divider()
     user_sidebar()
 
-# ── Global Markets (cached, refreshes every 5 min) ────────────────────────────
+# ── Global Markets (cached, refreshes every 5 min) ──────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def _global_markets_data():
     items = [
@@ -147,7 +144,7 @@ if _gm:
 
 st.divider()
 
-# ── Fragment 1: major index cards — refreshes every 2 min during market ────────
+# ── Fragment 1: major index cards — refreshes every 2 min during market ──────────
 _fast_interval = 120 if status["is_market_open"] else None
 
 
@@ -259,7 +256,7 @@ def _index_metrics():
 
 _index_metrics()
 
-# ── Market Intelligence Strip — derived from hist_1y + _gm (no extra fetches) ─
+# ── Market Intelligence Strip — derived from hist_1y + _gm (no extra fetches) ──
 def _intel_card(label: str, value: str, sub: str, color: str) -> str:
     _rgb_map = {
         "#00c896": "0,200,150",   "#ff4d6d": "255,77,109",
@@ -343,7 +340,7 @@ if _cards:
         unsafe_allow_html=True,
     )
 
-# ── Static: YTD chart ──────────────────────────────────────────────────────────
+# ── Static: YTD chart ────────────────────────────────────────────────────────────────────────────
 if hist_1y:
     st.markdown("#### Index Performance Comparison")
     try:
@@ -465,7 +462,7 @@ def _sector_rotation_data():
     return results
 
 
-# ── Fragment 2: sector tiles + heatmap + breadth + rotation + movers ──────────
+# ── Fragment 2: sector tiles + heatmap + breadth + rotation + movers ────────────
 _slow_interval = 120 if status["is_market_open"] else None
 
 
@@ -473,7 +470,7 @@ _slow_interval = 120 if status["is_market_open"] else None
 def _market_data():
     _live = is_market_open()
 
-    # ── Sector tiles ───────────────────────────────────────────────────────────
+    # ── Sector tiles ───────────────────────────────────────────────────────────────────────
     st.subheader("Sector Performance")
     sector_data = []
     s_cols = st.columns(min(len(sector_indices), 4))
@@ -514,7 +511,7 @@ def _market_data():
 
     st.divider()
 
-    # ── Fetch Nifty 50 prices (reused for breadth AND movers) ─────────────────
+    # ── Fetch Nifty 50 prices (reused for breadth AND movers) ─────────────────────
     nifty_tickers = list(NIFTY_50.values())
     if _live:
         price_data = fetch_stock_data(nifty_tickers, period="2d", interval="5m", use_cache=True)
@@ -550,7 +547,7 @@ def _market_data():
         except Exception:
             continue
 
-    # ── Heatmap + Breadth ──────────────────────────────────────────────────────
+    # ── Heatmap + Breadth ────────────────────────────────────────────────────────────
     c1, c2 = st.columns([2, 1])
     with c1:
         st.subheader("Sector Heatmap")
@@ -592,7 +589,7 @@ def _market_data():
 
     st.divider()
 
-    # ── Sector Rotation Quadrant ───────────────────────────────────────────────
+    # ── Sector Rotation Quadrant ──────────────────────────────────────────────────────────────
     rot_data = _sector_rotation_data()
     if rot_data:
         st.subheader("Sector Rotation")
@@ -609,7 +606,7 @@ def _market_data():
             pass
         st.divider()
 
-    # ── Top Gainers / Losers ───────────────────────────────────────────────────
+    # ── Top Gainers / Losers ─────────────────────────────────────────────────────────────────
     st.subheader("Top Gainers & Losers (Nifty 50)")
 
     def _mover_row(ticker, price, chg, is_gain):
@@ -665,7 +662,7 @@ def _market_data():
 
 _market_data()
 
-# ── Nifty 50 — 52-Week Range Map + Volume Anomalies ──────────────────────────
+# ── Nifty 50 — 52-Week Range Map + Volume Anomalies ──────────────────────────────
 _bd_slot = show_loading("Computing 52-week ranges and SMA positions for all Nifty 50 stocks…", "#f0b429")
 _bd_data = _nifty_breadth_range_data()
 _bd_slot.empty()
@@ -707,7 +704,7 @@ if _bd_data and _bd_data.get("stocks"):
                     unsafe_allow_html=True,
                 )
 
-    # ── Volume Anomalies ───────────────────────────────────────────────────────
+    # ── Volume Anomalies ───────────────────────────────────────────────────────────────────────
     anomalies = sorted(
         [s for s in stocks if s["vol_ratio"] >= 2.0],
         key=lambda x: x["vol_ratio"], reverse=True,
