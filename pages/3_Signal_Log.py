@@ -26,9 +26,10 @@ except Exception as _exc:
     _import_error = _tb.format_exc()
 
 st.set_page_config(page_title="Signal Log · NiftyEdge", layout="wide", page_icon="📋")
-from ui.styles import inject_global_css, page_header, show_loading, theme_toggle; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading, auth_guard, user_sidebar; inject_global_css()
+auth_guard()
 
-# ── Module-level helpers ───────────────────────────────────────────────────────
+# ── Module-level helpers ───────────────────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=600)
 def _market_regime():
     """Detect current Nifty trend, daily volatility, and India VIX fear level."""
@@ -125,7 +126,7 @@ OUTCOME_BADGE = {
     OUTCOME_OPEN:        ("OPEN",    "#7c83fd"),
 }
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
+# ── Sidebar ────────────────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
     timeframe_opt = st.selectbox("Timeframe", ["All", "SWING", "INTRADAY"])
@@ -144,8 +145,8 @@ with st.sidebar:
     )
 
     st.divider()
-    theme_toggle()
-# ── Core data ─────────────────────────────────────────────────────────────────
+    user_sidebar()
+# ── Core data ─────────────────────────────────────────────────────────────────────────────────────
 log       = get_signal_logger()
 today_str = _dt.date.today().isoformat()
 now_ist   = _dt.datetime.now(IST)
@@ -192,7 +193,7 @@ signals = log.get_signals(timeframe=timeframe, days_back=days_back)
 open_signals   = [s for s in signals if s["outcome"] == OUTCOME_OPEN]
 closed_signals = [s for s in signals if s["outcome"] != OUTCOME_OPEN]
 
-# ── Page header ────────────────────────────────────────────────────────────────
+# ── Page header ────────────────────────────────────────────────────────────────────────────────────
 from data.market_status import is_market_open as _is_mkt_open
 _mkt_live = _is_mkt_open()
 _dot_col  = "#00c896" if _mkt_live else "#f0b429"
@@ -206,7 +207,7 @@ with hcol2:
     st.markdown("<div style='height:38px'></div>", unsafe_allow_html=True)
     _run_scan = st.button("▶ Run Scan Now", type="primary", use_container_width=True)
 
-# ── Run Scan ───────────────────────────────────────────────────────────────────
+# ── Run Scan ────────────────────────────────────────────────────────────────────────────────────────
 if _run_scan:
     _gen_slot = show_loading("Running full Nifty 50 technical scan — RSI, MACD, Supertrend, volume anomalies…", "#f0b429")
     try:
@@ -232,12 +233,12 @@ if _run_scan:
                 pass
         st.rerun()
 
-# ── Signal Ranker ──────────────────────────────────────────────────────────────
+# ── Signal Ranker ───────────────────────────────────────────────────────────────────────────────────────
 from signals.signal_ranker import rank_signals as _rank_signals
 
 _top3 = _rank_signals(open_signals)[:3]
 
-# ── TOP 3 PANEL ───────────────────────────────────────────────────────────────
+# ── TOP 3 PANEL ───────────────────────────────────────────────────────────────────────────────────────
 if _top3:
     st.markdown(
         '<div style="font-size:0.72rem;font-weight:700;color:#f0b429;'
@@ -357,12 +358,12 @@ if _top3:
 elif open_signals:
     pass  # signals exist but prices not fetched yet — tabs show them normally
 
-# ── Tabs ───────────────────────────────────────────────────────────────────────
+# ── Tabs ────────────────────────────────────────────────────────────────────────────────────────────
 tab_live, tab_perf, tab_hist, tab_insights = st.tabs(["📍 Live Positions", "📊 Performance", "📜 History", "🧠 Insights"])
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 1 — LIVE POSITIONS                                                     ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 with tab_live:
 
     # Status bar
@@ -430,7 +431,7 @@ with tab_live:
         st.markdown(
             '<div style="background:rgba(124,131,253,0.06);border:1px solid rgba(124,131,253,0.12);'
             'border-radius:14px;padding:32px;text-align:center;margin:16px 0;">'
-            '<div style="font-size:1.8rem;margin-bottom:10px;">📭</div>'
+            '<div style="font-size:1.8rem;margin-bottom:10px;">💭</div>'
             '<div style="color:#e2e8f0;font-weight:700;margin-bottom:6px;">No open positions</div>'
             '<div style="color:#475569;font-size:0.82rem;line-height:1.6;">'
             'Run a scan to generate signals — they appear here automatically as open trades.'
@@ -556,7 +557,7 @@ with tab_live:
                         f'<span style="color:#6b7a99;font-weight:600;">Entry</span> {_entry_fmt}</span>'
                         f'<span style="font-size:0.68rem;color:#475569;">'
                         f'<span style="color:#6b7a99;font-weight:600;">Exit</span> '
-                        f'<span style="color:{"#94a3b8" if _exit_fmt == "Active" else "#e2e8f0"};">{_exit_fmt}</span>'
+                        f'<span style="color:{"#94a3b8" if _exit_fmt == "Active" else "#e2e8f0"}">{_exit_fmt}</span>'
                         f'</span>'
                         f'</div>'
 
@@ -632,9 +633,9 @@ with tab_live:
         _live_positions()
 
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 2 — PERFORMANCE                                                        ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 with tab_perf:
     _target_wins = perf.get("target_wins", perf["won"])
     _sq_prof     = perf.get("sq_profitable", 0)
@@ -644,7 +645,7 @@ with tab_perf:
     net_pnl      = perf.get("total_net_pnl_inr")
     avg_r        = perf.get("avg_r")
 
-    # ── KPIs ──────────────────────────────────────────────────────────────────
+    # ── KPIs ───────────────────────────────────────────────────────────────────────────────────────
     wr_col  = "#00c896" if total_closed > 0 and perf["win_rate"] >= 50 else "#ff4d6d" if total_closed > 0 else "#475569"
     pnl_col = "#00c896" if (net_pnl or 0) >= 0 else "#ff4d6d"
     r_col   = "#00c896" if (avg_r or 0) >= 0 else "#ff4d6d"
@@ -703,7 +704,6 @@ with tab_perf:
     st.markdown(kpi_html, unsafe_allow_html=True)
 
     # Data quality notice — show when expired signals are disproportionately high
-    # (symptom of historical duplicate OPEN signals that were expired on cleanup)
     _expired_n = perf.get("expired", 0)
     if _expired_n > 0 and total_closed > 0 and _expired_n > total_closed * 0.5:
         st.markdown(
@@ -763,7 +763,7 @@ with tab_perf:
             unsafe_allow_html=True,
         )
     else:
-        # ── Charts row ────────────────────────────────────────────────────────
+        # ── Charts row ──────────────────────────────────────────────────────────────────────────────
         cc1, cc2 = st.columns(2)
 
         with cc1:
@@ -826,7 +826,7 @@ with tab_perf:
             else:
                 st.caption("No closed trades yet.")
 
-        # ── Strategy breakdown ────────────────────────────────────────────────
+        # ── Strategy breakdown ──────────────────────────────────────────────────────────────────────────────
         by_strat = perf.get("by_strategy", {})
         if by_strat:
             st.markdown(
@@ -856,9 +856,9 @@ with tab_perf:
                 st.caption("Win Rate shows — for strategies with fewer than 3 closed trades (too small a sample).")
 
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 3 — HISTORY                                                            ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 with tab_hist:
     if not signals:
         st.caption("No signals in the selected period. Change the Period filter or run a scan.")
@@ -963,9 +963,9 @@ with tab_hist:
 *Position size: ₹{int(position_size):,} · figures scale linearly*
 """)
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 4 — INSIGHTS                                                           ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 with tab_insights:
 
     regime = _market_regime()
@@ -974,7 +974,7 @@ with tab_insights:
     fear       = regime["fear"]
     vix_val    = regime["vix"]
 
-    # ── Market Regime Banner ──────────────────────────────────────────────────
+    # ── Market Regime Banner ────────────────────────────────────────────────────────────────────────────
     trend_col  = "#00c896" if trend == "BULLISH" else ("#ff4d6d" if trend == "BEARISH" else "#6b7a99")
     vol_col    = "#f0b429" if volatility == "HIGH" else ("#00c896" if volatility == "LOW" else "#94a3b8")
     fear_col   = "#ff4d6d" if fear == "FEARFUL" else ("#f0b429" if fear == "NEUTRAL" else "#00c896")
@@ -1004,7 +1004,7 @@ with tab_insights:
 
     st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
 
-    # ── Strategy-Regime Matcher ───────────────────────────────────────────────
+    # ── Strategy-Regime Matcher ────────────────────────────────────────────────────────────────────────────
     st.markdown(
         '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
         'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Strategy Suitability Right Now</div>',
@@ -1077,7 +1077,7 @@ with tab_insights:
 
     st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
 
-    # ── Personal Bias Analysis ────────────────────────────────────────────────
+    # ── Personal Bias Analysis ────────────────────────────────────────────────────────────────────────────
     st.markdown(
         '<div style="font-size:0.62rem;font-weight:700;color:#475569;'
         'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">Your Trading Patterns</div>',
