@@ -79,7 +79,7 @@ st.set_page_config(
 # All st.cache_resource calls MUST come after set_page_config
 _start_scheduler()
 
-from ui.styles import inject_global_css, theme_toggle, auth_guard, user_sidebar
+from ui.styles import inject_global_css, auth_guard, user_sidebar
 inject_global_css()
 auth_guard()
 
@@ -106,7 +106,7 @@ _catchup_signals()
 
 from signals.signal_logger import get_signal_logger
 
-# ── Data helpers (module-level so @st.cache_data hashes reliably) ──────────────────
+# ── Data helpers (module-level so @st.cache_data hashes reliably) ──────────────
 @st.cache_data(ttl=300)
 def _quick_stats():
     try:
@@ -242,37 +242,32 @@ _rgb   = "0,200,150" if is_open else ("240,180,41" if is_pre else "255,77,109")
 _pulse = "animation:pulse 1.4s ease-in-out infinite;" if (is_open or is_pre) else ""
 _now   = _dt.datetime.now(_IST).strftime("%H:%M IST")
 
-# ── TOP HEADER ───────────────────────────────────────────────────────────────────────
-_hdr_col, _tog_col = st.columns([5, 1])
-with _hdr_col:
-    st.markdown(
-        f'<div style="display:flex;align-items:center;justify-content:space-between;'
-        f'padding:8px 0 16px;">'
-        f'<div>'
-        f'<div style="font-size:1.65rem;font-weight:900;letter-spacing:-0.045em;color:#e2e8f0;">'
-        f'Nifty<span style="background:linear-gradient(135deg,#3b82f6,#22c55e);'
-        f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Edge</span></div>'
-        f'<div style="font-size:0.7rem;color:#4b5a72;margin-top:2px;letter-spacing:0.04em;">'
-        f'AI-POWERED NSE/BSE ANALYSIS</div>'
-        f'</div>'
-        f'<div style="display:flex;align-items:center;gap:8px;">'
-        f'<div style="display:inline-flex;align-items:center;gap:6px;'
-        f'background:rgba({_rgb},0.08);border:1px solid rgba({_rgb},0.22);'
-        f'border-radius:20px;padding:5px 12px;">'
-        f'<div style="width:7px;height:7px;border-radius:50%;background:{_sc};{_pulse}flex-shrink:0;"></div>'
-        f'<span style="color:{_sc};font-size:0.7rem;font-weight:700;">{status["status_label"].split("(")[0].strip()}</span>'
-        f'</div>'
-        f'<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);'
-        f'border-radius:20px;padding:5px 12px;font-size:0.7rem;color:#4b5a72;">{_now}</div>'
-        f'</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-with _tog_col:
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-    theme_toggle()
+# ── TOP HEADER ──────────────────────────────────────────────────────────────────────────────
+st.markdown(
+    f'<div style="display:flex;align-items:center;justify-content:space-between;'
+    f'padding:8px 0 16px;">'
+    f'<div>'
+    f'<div style="font-size:1.65rem;font-weight:900;letter-spacing:-0.045em;color:#e2e8f0;">'
+    f'Nifty<span style="background:linear-gradient(135deg,#3b82f6,#22c55e);'
+    f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Edge</span></div>'
+    f'<div style="font-size:0.7rem;color:#4b5a72;margin-top:2px;letter-spacing:0.04em;">'
+    f'AI-POWERED NSE/BSE ANALYSIS</div>'
+    f'</div>'
+    f'<div style="display:flex;align-items:center;gap:8px;">'
+    f'<div style="display:inline-flex;align-items:center;gap:6px;'
+    f'background:rgba({_rgb},0.08);border:1px solid rgba({_rgb},0.22);'
+    f'border-radius:20px;padding:5px 12px;">'
+    f'<div style="width:7px;height:7px;border-radius:50%;background:{_sc};{_pulse}flex-shrink:0;"></div>'
+    f'<span style="color:{_sc};font-size:0.7rem;font-weight:700;">{status["status_label"].split("(")[0].strip()}</span>'
+    f'</div>'
+    f'<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);'
+    f'border-radius:20px;padding:5px 12px;font-size:0.7rem;color:#4b5a72;">{_now}</div>'
+    f'</div>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
 
-# ── SVG ICON LIBRARY (used across tabs) ──────────────────────────────────────────────────────
+# ── SVG ICON LIBRARY (used across tabs) ──────────────────────────────────────────────
 _SVG = {
     "swing":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="4" height="8" rx="1" fill="rgba(255,255,255,0.1)"/><line x1="5" y1="3" x2="5" y2="6"/><line x1="5" y1="14" x2="5" y2="17"/><rect x="13" y="9" width="4" height="5" rx="1" fill="rgba(255,255,255,0.05)"/><line x1="15" y1="6" x2="15" y2="9"/><line x1="15" y1="14" x2="15" y2="17"/></svg>',
     "intra":  '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,15 6,8 10,12 15,5"/><polyline points="13,5 15,5 15,7"/></svg>',
@@ -307,9 +302,9 @@ t_home, t_signals, t_news, t_screener, t_tools = st.tabs([
     "🏠 Home", "💹 Signals", "📰 News", "🔍 Screener", "🛠️ Tools"
 ])
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
+# ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 1 — HOME                                                               ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_home:
 
     # ── BEST TRADES RIGHT NOW (top of page — most actionable content first) ────
@@ -404,7 +399,7 @@ with t_home:
         )
         st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
 
-    # ── MARKET PULSE ──────────────────────────────────────────────────────────────────────
+    # ── MARKET PULSE ───────────────────────────────────────────────────────────────────────
     indices = _hero_indices()
 
     def _vix_sentiment(v):
@@ -490,7 +485,7 @@ with t_home:
 
     st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
 
-    # ── TODAY'S SIGNALS FEED ──────────────────────────────────────────────────────────────────
+    # ── TODAY'S SIGNALS FEED ─────────────────────────────────────────────────────────────────────
     today_sigs = _today_signals()
     _STRAT_COLORS = {
         "Trend Pullback": "#7c83fd", "Volume Breakout": "#f0b429",
@@ -518,8 +513,7 @@ with t_home:
             f'<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">'
             f'{s["ticker"].replace(".NS","")}</span>'
             f'<span style="font-size:0.6rem;font-weight:700;'
-            f'color:{"#00c896" if s.get("direction")=="LONG" else "#ff4d6d"};">'  
-            f'{"↑ LONG" if s.get("direction")=="LONG" else "↓ SHORT"}</span>'
+            f'color:{"#00c896" if s.get("direction")=="LONG" else "#ff4d6d"};">↑ LONG" if s.get("direction")=="LONG" else "↓ SHORT"}</span>'
             f'</div>'
             f'<div style="font-size:0.65rem;color:{_STRAT_COLORS.get(s.get("strategy",""),"#6b7a99")};'
             f'font-weight:600;margin-bottom:8px;">{s.get("strategy","")}</div>'
@@ -546,7 +540,7 @@ with t_home:
     else:
         st.markdown(
             '<div class="feed-card" style="text-align:center;padding:24px;">'
-            '<div style="font-size:1.4rem;margin-bottom:6px;">💭</div>'
+            '<div style="font-size:1.4rem;margin-bottom:6px;">📭</div>'
             '<div style="color:#475569;font-size:0.85rem;">No signals yet today</div>'
             '<div style="color:#374151;font-size:0.75rem;margin-top:4px;">Run a scan from the Signals tab</div>'
             '</div>',
@@ -589,9 +583,9 @@ with t_home:
         with l_col:
             st.markdown(_mover_card(losers, False), unsafe_allow_html=True)
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
+# ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 2 — SIGNALS                                                            ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_signals:
     # ── SIGNAL STATS ──────────────────────────────────────────────────────────────────────
     _qs = _quick_stats()
@@ -628,9 +622,9 @@ with t_signals:
     ]:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
+# ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 3 — NEWS                                                               ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_news:
     @st.cache_data(ttl=1800)
     def _home_news():
@@ -678,9 +672,9 @@ with t_news:
         unsafe_allow_html=True,
     )
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
+# ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 4 — SCREENER                                                           ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_screener:
     st.markdown(
         '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
@@ -694,9 +688,9 @@ with t_screener:
     ]:
         st.markdown(_nav_card(_slug, _ico, _title, _desc, _col, _rgb), unsafe_allow_html=True)
 
-# ╔════════════════════════════════════════════════════════════════════════════╗
+# ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  TAB 5 — TOOLS                                                              ║
-# ╚════════════════════════════════════════════════════════════════════════════╝
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_tools:
     st.markdown(
         '<div style="font-size:0.65rem;font-weight:700;color:#374151;'
