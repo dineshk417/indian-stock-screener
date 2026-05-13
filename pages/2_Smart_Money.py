@@ -261,6 +261,8 @@ with tab_flow:
     _fii_slot = show_loading("Loading FII &amp; DII daily net flow data — foreign vs domestic institutional buying…", "#00c896")
     flow_df = fetch_fii_dii_flow(days_back)
     _fii_slot.empty()
+    if not flow_df.empty:
+        flow_df = flow_df.loc[:, ~flow_df.columns.duplicated()]
 
     if flow_df.empty:
         _empty(
