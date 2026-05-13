@@ -274,7 +274,10 @@ with tab_flow:
         def _net_sum(df: pd.DataFrame) -> float:
             if "Net ₹Cr" not in df.columns or df.empty:
                 return 0.0
-            return float(pd.to_numeric(df["Net ₹Cr"], errors="coerce").sum())
+            col = df["Net ₹Cr"]
+            if isinstance(col, pd.DataFrame):
+                col = col.iloc[:, 0]
+            return float(pd.to_numeric(col, errors="coerce").sum())
 
         fii_net = _net_sum(_fii)
         dii_net = _net_sum(_dii)
@@ -394,6 +397,60 @@ with tab_insider:
             + "</div>",
             unsafe_allow_html=True,
         )
+
+        # ── Charts ────────────────────────────────────────────────────────────
+        _ic1, _ic2 = st.columns(2)
+
+        if "Disclosed" in insider_df.columns and "Txn" in insider_df.columns:
+            _ins_ts = insider_df.copy()
+            _ins_ts["_date"] = pd.to_datetime(_ins_ts["Disclosed"], errors="coerce").dt.date
+            _ins_ts["_is_buy"] = _ins_ts["Txn"].str.upper().str.contains("BUY|ACQUI|CREAT", na=False)
+            _daily = (_ins_ts.groupby(["_date", "_is_buy"]).size()
+                      .reset_index(name="Count"))
+            _buy_d = _daily[_daily["_is_buy"]].set_index("_date")["Count"]
+            _sel_d = _daily[~_daily["_is_buy"]].set_index("_date")["Count"]
+            _all_dates = sorted(set(_buy_d.index) | set(_sel_d.index))
+            if _all_dates:
+                fig_ins = go.Figure()
+                fig_ins.add_trace(go.Bar(x=_all_dates, y=[_buy_d.get(d, 0) for d in _all_dates],
+                    name="Buy / Acquire", marker_color="#00c896"))
+                fig_ins.add_trace(go.Bar(x=_all_dates, y=[_sel_d.get(d, 0) for d in _all_dates],
+                    name="Sell / Dispose", marker_color="#ff4d6d"))
+                fig_ins.update_layout(
+                    barmode="stack", height=280, margin=dict(l=0, r=0, t=28, b=0),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#94a3b8", legend=dict(orientation="h", y=1.08),
+                    title=dict(text="Daily Insider Disclosures", font_size=13, font_color="#e2e8f0"),
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.05)", title="Count"),
+                )
+                with _ic1:
+                    st.plotly_chart(fig_ins, use_container_width=True)
+
+        if "Company" in insider_df.columns and "Value ₹ Cr" in insider_df.columns:
+            _top_co = (insider_df.copy()
+                .assign(**{"Value ₹ Cr": pd.to_numeric(insider_df["Value ₹ Cr"], errors="coerce")})
+                .groupby("Company", as_index=False)["Value ₹ Cr"].sum()
+                .dropna(subset=["Value ₹ Cr"])
+                .sort_values("Value ₹ Cr", key=abs, ascending=False)
+                .head(10))
+            if not _top_co.empty:
+                _top_co["Color"] = _top_co["Value ₹ Cr"].apply(lambda v: "#00c896" if v >= 0 else "#ff4d6d")
+                fig_co = go.Figure(go.Bar(
+                    x=_top_co["Value ₹ Cr"], y=_top_co["Company"],
+                    orientation="h", marker_color=_top_co["Color"],
+                    hovertemplate="<b>%{y}</b><br>₹%{x:+,.1f} Cr<extra></extra>",
+                ))
+                fig_co.update_layout(
+                    height=280, margin=dict(l=0, r=0, t=28, b=0),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#94a3b8",
+                    title=dict(text="Top Companies by Insider Trade Value", font_size=13, font_color="#e2e8f0"),
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.05)", title="Net ₹ Cr"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.05)", autorange="reversed"),
+                )
+                with _ic2:
+                    st.plotly_chart(fig_co, use_container_width=True)
 
         if "Category" in insider_df.columns:
             cats = sorted(insider_df["Category"].dropna().unique())
