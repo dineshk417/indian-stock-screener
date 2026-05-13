@@ -9,12 +9,13 @@ from config.stock_universe import NIFTY_50, NIFTY_200
 from config.settings import RSI_PERIOD
 
 st.set_page_config(page_title="Technical Screener · NiftyEdge", layout="wide", page_icon="📈")
-from ui.styles import inject_global_css, page_header, show_loading, theme_toggle; inject_global_css()
+from ui.styles import inject_global_css, page_header, show_loading, auth_guard, user_sidebar; inject_global_css()
+auth_guard()
 
-# ── PAGE HEADER ────────────────────────────────────────────────────────────────
+# ── PAGE HEADER ───────────────────────────────────────────────────────────────────────────────
 page_header("📈 Technical Screener", subtitle="NSE · Equity · Technical Analysis")
 
-# ── SIDEBAR ────────────────────────────────────────────────────────────────────
+# ── SIDEBAR ────────────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Technical Filters")
     universe_choice = st.selectbox("Universe", ["Nifty 50", "Nifty 200"])
@@ -48,8 +49,8 @@ with st.sidebar:
     run_btn = st.button("📈 Run Technical Scan", type="primary", width="stretch")
 
     st.divider()
-    theme_toggle()
-# ── PRESET CARDS ──────────────────────────────────────────────────────────────
+    user_sidebar()
+# ── PRESET CARDS ─────────────────────────────────────────────────────────────────────────────
 PRESETS_UI = [
     {"label": "Oversold",     "icon": "🔻", "sub": "RSI < 35",        "color": "#ff4d6d", "rgb": "255,77,109",
      "desc": "Potential bounce candidates near support"},
@@ -96,7 +97,7 @@ run_momentum = _preset_btns["run_mo"]
 
 st.markdown('<div style="margin-bottom:8px;"></div>', unsafe_allow_html=True)
 
-# ── SCAN INSIGHTS ──────────────────────────────────────────────────────────────
+# ── SCAN INSIGHTS ──────────────────────────────────────────────────────────────────────────────────
 SCAN_INSIGHTS = [
     ("📊 RSI Explained",
      "RSI measures momentum on a 0–100 scale. Below 30 = oversold. Above 70 = overbought. RSI 40–60 = neutral momentum."),
@@ -205,7 +206,7 @@ else:
 if sort_by in result_df.columns:
     result_df = result_df.sort_values(sort_by, ascending=sort_asc)
 
-# ── STATS STRIP ────────────────────────────────────────────────────────────────
+# ── STATS STRIP ────────────────────────────────────────────────────────────────────────────────────
 avg_rsi   = result_df["rsi"].dropna().mean()          if "rsi"           in result_df.columns else None
 avg_str   = result_df["tech_strength"].dropna().mean() if "tech_strength" in result_df.columns else None
 avg_vol   = result_df["volume_ratio"].dropna().mean()  if "volume_ratio"  in result_df.columns else None
@@ -253,14 +254,14 @@ if result_df.empty:
     st.markdown(
         '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);'
         'border-radius:14px;padding:32px;text-align:center;">'
-        '<div style="font-size:1.5rem;margin-bottom:8px;">📭</div>'
+        '<div style="font-size:1.5rem;margin-bottom:8px;">💭</div>'
         '<div style="color:#475569;font-weight:600;">No stocks match your criteria</div>'
         '</div>',
         unsafe_allow_html=True,
     )
     st.stop()
 
-# ── RESULTS TABLE ─────────────────────────────────────────────────────────────
+# ── RESULTS TABLE ─────────────────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div style="font-size:0.68rem;font-weight:700;color:#475569;'
     f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">'
@@ -270,7 +271,7 @@ st.markdown(
 display_cols = ["ticker", "close", "rsi", "trend", "tech_strength", "volume_ratio", "macd_bullish", "patterns", "support", "resistance"]
 st.dataframe(result_df[[c for c in display_cols if c in result_df.columns]], use_container_width=True, hide_index=True)
 
-# ── CHART DETAIL ──────────────────────────────────────────────────────────────
+# ── CHART DETAIL ──────────────────────────────────────────────────────────────────────────────
 st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
 st.markdown(
     '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
