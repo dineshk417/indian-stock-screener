@@ -6,15 +6,15 @@ from data.news_fetcher import fetch_market_news, format_news_for_claude
 from analysis.sentiment import analyze_market_sentiment, has_api_key, get_engine_name
 
 st.set_page_config(page_title="News & Sentiment · NiftyEdge", layout="wide", page_icon="📰")
-from ui.styles import inject_global_css, page_header, theme_toggle; inject_global_css()
+from ui.styles import inject_global_css, page_header, auth_guard, user_sidebar; inject_global_css()
+auth_guard()
 with st.sidebar:
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    theme_toggle()
+    user_sidebar()
 
-# ── PAGE HEADER ────────────────────────────────────────────────────────────────
+# ── PAGE HEADER ─────────────────────────────────────────────────────────────────────────────
 page_header("📰 News & Market Sentiment", subtitle="AI · Market Intelligence · Daily")
 
-# ── FETCH ──────────────────────────────────────────────────────────────────────
+# ── FETCH ────────────────────────────────────────────────────────────────────────────────
 fetch_banner = st.empty()
 fetch_banner.markdown(
     '<div style="background:rgba(124,131,253,0.06);border:1px solid rgba(124,131,253,0.2);'
@@ -32,7 +32,7 @@ if not news_items:
     st.error("Could not fetch news. Check your internet connection.")
     st.stop()
 
-# ── ANALYSE ────────────────────────────────────────────────────────────────────
+# ── ANALYSE ────────────────────────────────────────────────────────────────────────────────
 engine = get_engine_name()
 analyse_banner = st.empty()
 analyse_banner.markdown(
@@ -52,7 +52,7 @@ except Exception:
     sentiment = {}
 analyse_banner.empty()
 
-# ── PARSE SENTIMENT DATA ───────────────────────────────────────────────────────
+# ── PARSE SENTIMENT DATA ─────────────────────────────────────────────────────────────────────
 overall   = sentiment.get("overall_sentiment", 5)
 label     = sentiment.get("sentiment_label", "Neutral")
 summary   = sentiment.get("overnight_summary", "")
@@ -73,7 +73,7 @@ _SENT_META = {
 s_color, s_rgb, s_arrow = _SENT_META.get(label, ("#f0b429", "240,180,41", "→"))
 score_pct = int(overall * 10)  # 0-100
 
-# ── SENTIMENT HERO CARD ────────────────────────────────────────────────────────
+# ── SENTIMENT HERO CARD ────────────────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div style="background:linear-gradient(145deg,#111827,#0d1117);'
     f'border:1px solid rgba({s_rgb},0.2);border-radius:20px;'
@@ -84,7 +84,6 @@ st.markdown(
 
     f'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px;">'
 
-    # Left: score
     f'<div style="display:flex;align-items:center;gap:24px;">'
     f'<div style="text-align:center;">'
     f'<div style="font-size:3.5rem;font-weight:900;color:{s_color};line-height:1;letter-spacing:-0.04em;">{overall}<span style="font-size:1.4rem;color:rgba({s_rgb},0.5);">/10</span></div>'
@@ -104,7 +103,6 @@ st.markdown(
     f'</div>'
     f'</div>'
 
-    # Right: quick stats
     f'<div style="display:flex;gap:12px;flex-wrap:wrap;">'
     f'<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);'
     f'border-radius:12px;padding:12px 16px;min-width:70px;text-align:center;">'
@@ -127,11 +125,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── SUMMARY + SECTOR OUTLOOK ───────────────────────────────────────────────────
+# ── SUMMARY + SECTOR OUTLOOK ───────────────────────────────────────────────────────────────────────
 left, right = st.columns([3, 2])
 
 with left:
-    # Market Summary card
     if summary:
         st.markdown(
             '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
@@ -146,7 +143,6 @@ with left:
             unsafe_allow_html=True,
         )
 
-    # Trade implications
     if impl:
         st.markdown(
             '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
@@ -161,7 +157,6 @@ with left:
             unsafe_allow_html=True,
         )
 
-    # Key themes as chips
     if themes:
         st.markdown(
             '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
@@ -177,7 +172,6 @@ with left:
         ])
         st.markdown(f'<div style="line-height:2.2;margin-bottom:16px;">{chips}</div>', unsafe_allow_html=True)
 
-    # Catalysts + Risks side by side
     if catalysts or risks:
         c1, c2 = st.columns(2)
         with c1:
@@ -210,7 +204,6 @@ with left:
                 )
 
 with right:
-    # Sector Outlook
     if sectors:
         st.markdown(
             '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
@@ -233,7 +226,6 @@ with right:
                 unsafe_allow_html=True,
             )
 
-    # Stock Mentions
     if mentions:
         st.markdown(
             '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
@@ -260,7 +252,7 @@ with right:
                 unsafe_allow_html=True,
             )
 
-# ── NEWS FEED ──────────────────────────────────────────────────────────────────
+# ── NEWS FEED ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
 st.markdown(
     '<div style="font-size:0.68rem;font-weight:700;color:#475569;'

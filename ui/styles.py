@@ -10,7 +10,7 @@ _CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
 
-/* ── CSS variables (dark theme defaults) ─────────────────────────────────── */
+/* ── CSS variables (dark theme defaults) ──────────────────────────────────────── */
 :root {
     --bg-base:       #060b14;
     --bg-surface:    #0c1422;
@@ -38,7 +38,7 @@ _CSS = """
     --shadow-lg:     0 8px 40px rgba(0,0,0,0.5);
 }
 
-/* ── Base ─────────────────────────────────────────────────────────────────── */
+/* ── Base ────────────────────────────────────────────────────────────────────────── */
 html, body, [class*="css"], .stMarkdown, .stText, p {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
     -webkit-font-smoothing: antialiased !important;
@@ -48,7 +48,7 @@ h2 { font-weight: 700 !important; letter-spacing: -0.025em !important; color: va
 h3 { font-weight: 600 !important; letter-spacing: -0.01em !important; color: var(--text-primary) !important; }
 p  { color: var(--text-secondary) !important; line-height: 1.65 !important; font-size: 0.9rem !important; }
 
-/* ── App background ───────────────────────────────────────────────────────── */
+/* ── App background ──────────────────────────────────────────────────────────────── */
 .stApp, [data-testid="stAppViewContainer"] {
     background: var(--bg-base) !important;
 }
@@ -58,7 +58,7 @@ p  { color: var(--text-secondary) !important; line-height: 1.65 !important; font
     border-bottom: 1px solid var(--border) !important;
 }
 
-/* ── Layout ───────────────────────────────────────────────────────────────── */
+/* ── Layout ────────────────────────────────────────────────────────────────────────── */
 .main .block-container {
     padding-top: 1.5rem !important;
     padding-bottom: 3rem !important;
@@ -68,7 +68,7 @@ p  { color: var(--text-secondary) !important; line-height: 1.65 !important; font
 footer    { visibility: hidden; }
 [data-testid="stDecoration"] { display: none; }
 
-/* ── Metric cards ─────────────────────────────────────────────────────────── */
+/* ── Metric cards ───────────────────────────────────────────────────────────────────── */
 [data-testid="metric-container"] {
     background: var(--bg-surface) !important;
     border: 1px solid var(--border) !important;
@@ -112,7 +112,7 @@ footer    { visibility: hidden; }
     font-weight: 600 !important;
 }
 
-/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+/* ── Sidebar ────────────────────────────────────────────────────────────────────────── */
 [data-testid="stSidebar"] > div:first-child {
     background: var(--bg-surface) !important;
     border-right: 1px solid var(--border) !important;
@@ -138,7 +138,7 @@ footer    { visibility: hidden; }
     color: var(--text-secondary) !important;
 }
 
-/* ── Sidebar nav links ────────────────────────────────────────────────────── */
+/* ── Sidebar nav links ──────────────────────────────────────────────────────────────────── */
 [data-testid="stSidebarNavLink"] {
     border-radius: var(--radius-sm) !important;
     font-size: 0.84rem !important;
@@ -158,7 +158,7 @@ footer    { visibility: hidden; }
     font-weight: 600 !important;
 }
 
-/* ── Buttons ──────────────────────────────────────────────────────────────── */
+/* ── Buttons ────────────────────────────────────────────────────────────────────────── */
 .stButton > button {
     border-radius: var(--radius-sm) !important;
     font-weight: 600 !important;
@@ -191,7 +191,7 @@ button[data-testid="baseButton-primary"] {
     transform: translateY(-1px) !important;
 }
 
-/* ── Inputs / Selects ─────────────────────────────────────────────────────── */
+/* ── Inputs / Selects ─────────────────────────────────────────────────────────────────── */
 [data-testid="stSelectbox"] > div > div,
 [data-testid="stMultiSelect"] > div > div {
     border-radius: var(--radius-sm) !important;
@@ -200,7 +200,7 @@ button[data-testid="baseButton-primary"] {
     font-size: 0.85rem !important;
 }
 
-/* ── Multiselect tags ─────────────────────────────────────────────────────── */
+/* ── Multiselect tags ─────────────────────────────────────────────────────────────────── */
 [data-baseweb="tag"] {
     background: rgba(59,130,246,0.12) !important;
     border: 1px solid rgba(59,130,246,0.28) !important;
@@ -216,7 +216,7 @@ button[data-testid="baseButton-primary"] {
     fill: rgba(147,197,253,0.7) !important;
 }
 
-/* ── Number / text inputs ─────────────────────────────────────────────────── */
+/* ── Number / text inputs ───────────────────────────────────────────────────────────────── */
 [data-testid="stNumberInput"] input,
 [data-testid="stTextInput"]   input,
 [data-testid="stTextArea"]    textarea {
@@ -234,17 +234,17 @@ button[data-testid="baseButton-primary"] {
     box-shadow: 0 0 0 3px rgba(59,130,246,0.1) !important;
 }
 
-/* ── Checkboxes ───────────────────────────────────────────────────────────── */
+/* ── Checkboxes ───────────────────────────────────────────────────────────────────────── */
 [data-testid="stCheckbox"] label span { color: var(--text-secondary) !important; font-size: 0.84rem !important; }
 [data-testid="stCheckbox"] input:checked + div { background: var(--blue) !important; border-color: var(--blue) !important; }
 
-/* ── Sliders ──────────────────────────────────────────────────────────────── */
+/* ── Sliders ────────────────────────────────────────────────────────────────────────── */
 [data-testid="stSlider"] [role="slider"] {
     background: var(--blue) !important;
     box-shadow: 0 0 0 4px rgba(59,130,246,0.2) !important;
 }
 
-/* ── Download button ──────────────────────────────────────────────────────── */
+/* ── Download button ────────────────────────────────────────────────────────────────────── */
 [data-testid="stDownloadButton"] > button {
     background: var(--bg-elevated) !important;
     border: 1px solid var(--border) !important;
@@ -257,7 +257,7 @@ button[data-testid="baseButton-primary"] {
     color: var(--blue) !important;
 }
 
-/* ── Selectbox dropdown options ───────────────────────────────────────────── */
+/* ── Selectbox dropdown options ─────────────────────────────────────────────────────────────── */
 [data-baseweb="popover"] [role="option"] { font-size: 0.84rem !important; color: var(--text-secondary) !important; }
 [data-baseweb="popover"] [role="option"]:hover,
 [data-baseweb="popover"] [aria-selected="true"] {
@@ -265,7 +265,7 @@ button[data-testid="baseButton-primary"] {
     color: var(--blue) !important;
 }
 
-/* ── DataFrames ───────────────────────────────────────────────────────────── */
+/* ── DataFrames ────────────────────────────────────────────────────────────────────────── */
 [data-testid="stDataFrame"] {
     border-radius: var(--radius-md) !important;
     overflow: hidden !important;
@@ -287,7 +287,7 @@ button[data-testid="baseButton-primary"] {
 [data-testid="stDataFrame"] table tbody tr:hover { background: rgba(59,130,246,0.06) !important; }
 [data-testid="stDataFrame"] table tbody td { font-size: 0.84rem !important; padding: 9px 14px !important; }
 
-/* ── Expanders ────────────────────────────────────────────────────────────── */
+/* ── Expanders ────────────────────────────────────────────────────────────────────────── */
 details {
     border: 1px solid var(--border) !important;
     border-radius: var(--radius-md) !important;
@@ -306,7 +306,7 @@ details summary {
 }
 details summary:hover { color: var(--text-primary) !important; }
 
-/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+/* ── Tabs ───────────────────────────────────────────────────────────────────────────── */
 [data-testid="stTabs"] {
     border-bottom: 1px solid var(--border) !important;
     margin-bottom: 4px !important;
@@ -327,36 +327,36 @@ details summary:hover { color: var(--text-primary) !important; }
     background: transparent !important;
 }
 
-/* ── Alerts / banners ─────────────────────────────────────────────────────── */
+/* ── Alerts / banners ───────────────────────────────────────────────────────────────────────── */
 [data-testid="stAlert"] {
     border-radius: var(--radius-md) !important;
     border: 1px solid var(--border) !important;
     font-size: 0.86rem !important;
 }
 
-/* ── Status widget ────────────────────────────────────────────────────────── */
+/* ── Status widget ───────────────────────────────────────────────────────────────────────── */
 [data-testid="stStatus"] {
     border-radius: var(--radius-md) !important;
     border: 1px solid var(--border) !important;
     background: var(--bg-surface) !important;
 }
 
-/* ── Caption / small text ─────────────────────────────────────────────────── */
+/* ── Caption / small text ──────────────────────────────────────────────────────────────────── */
 .stCaption, [data-testid="stCaptionContainer"] {
     color: var(--text-muted) !important;
     font-size: 0.78rem !important;
 }
 
-/* ── Dividers ─────────────────────────────────────────────────────────────── */
+/* ── Dividers ────────────────────────────────────────────────────────────────────────── */
 hr { border-color: var(--border) !important; margin: 1.25rem 0 !important; }
 
-/* ── Progress bars ────────────────────────────────────────────────────────── */
+/* ── Progress bars ──────────────────────────────────────────────────────────────────────── */
 [data-testid="stProgressBar"] > div > div {
     background: linear-gradient(90deg, var(--blue), var(--green)) !important;
     border-radius: 4px !important;
 }
 
-/* ── Page nav links ───────────────────────────────────────────────────────── */
+/* ── Page nav links ──────────────────────────────────────────────────────────────────────── */
 a[data-testid="stPageLink-NavLink"] {
     display: inline-flex !important;
     align-items: center !important;
@@ -379,13 +379,13 @@ a[data-testid="stPageLink-NavLink"]:hover {
     background: var(--blue-dim) !important;
 }
 
-/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+/* ── Scrollbar ────────────────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
-/* ── Animations ───────────────────────────────────────────────────────────── */
+/* ── Animations ────────────────────────────────────────────────────────────────────────── */
 @keyframes pulse {
     0%,100% { opacity: 1; }
     50%      { opacity: 0.3; }
@@ -403,7 +403,7 @@ a[data-testid="stPageLink-NavLink"]:hover {
     50%      { box-shadow: 0 0 20px rgba(59,130,246,0.4); }
 }
 
-/* ── Scroll-reveal utility ────────────────────────────────────────────────── */
+/* ── Scroll-reveal utility ───────────────────────────────────────────────────────────────── */
 .ne-reveal {
     opacity: 0;
     transform: translateY(18px);
@@ -414,7 +414,7 @@ a[data-testid="stPageLink-NavLink"]:hover {
     transform: translateY(0);
 }
 
-/* ── Branded spinner ──────────────────────────────────────────────────────── */
+/* ── Branded spinner ──────────────────────────────────────────────────────────────────────── */
 [data-testid="stSpinner"] > div { text-align: center; }
 [data-testid="stSpinner"] svg circle { stroke: rgba(59,130,246,0.15) !important; }
 [data-testid="stSpinner"] svg path,
@@ -428,7 +428,7 @@ a[data-testid="stPageLink-NavLink"]:hover {
     font-weight: 500 !important;
 }
 
-/* ── Top-bar loading indicator ────────────────────────────────────────────── */
+/* ── Top-bar loading indicator ──────────────────────────────────────────────────────────────── */
 [data-testid="stStatusWidget"] svg { display: none !important; }
 [data-testid="stStatusWidget"] { background: transparent !important; border: none !important; }
 [data-testid="stStatusWidget"]::before {
@@ -447,7 +447,7 @@ a[data-testid="stPageLink-NavLink"]:hover {
     100% { background-position: -200% 0; }
 }
 
-/* ── Shimmer skeleton ─────────────────────────────────────────────────────── */
+/* ── Shimmer skeleton ─────────────────────────────────────────────────────────────────────── */
 .ss-skeleton {
     background: linear-gradient(90deg,
         rgba(255,255,255,0.03) 25%,
@@ -463,7 +463,7 @@ a[data-testid="stPageLink-NavLink"]:hover {
     100% { background-position: -200% 0; }
 }
 
-/* ── NiftyEdge card utility ───────────────────────────────────────────────── */
+/* ── NiftyEdge card utility ───────────────────────────────────────────────────────────────────── */
 .ne-card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -501,60 +501,11 @@ _SCROLL_REVEAL_JS = """
 </script>
 """
 
-_LIGHT_CSS = """
-<style>
-:root {
-    --bg-base:       #f8fafc;
-    --bg-surface:    #ffffff;
-    --bg-elevated:   #f1f5f9;
-    --bg-highest:    #e2e8f0;
-    --border:        rgba(0,0,0,0.08);
-    --border-accent: rgba(37,99,235,0.3);
-    --text-primary:  #0f172a;
-    --text-secondary:#334155;
-    --text-muted:    #64748b;
-    --blue-dim:      rgba(37,99,235,0.08);
-    --green-dim:     rgba(22,163,74,0.08);
-    --red-dim:       rgba(220,38,38,0.08);
-    --gold-dim:      rgba(217,119,6,0.08);
-}
-.stApp, [data-testid="stAppViewContainer"] { background: #f1f5f9 !important; }
-[data-testid="stHeader"] { background: rgba(241,245,249,0.9) !important; border-bottom: 1px solid rgba(0,0,0,0.07) !important; }
-[data-testid="stSidebar"] > div:first-child { background: #ffffff !important; border-right: 1px solid rgba(0,0,0,0.07) !important; }
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3 { color: #64748b !important; }
-p { color: #334155 !important; }
-h1, h2, h3 { color: #0f172a !important; }
-[data-testid="metric-container"] { background: #ffffff !important; border-color: rgba(0,0,0,0.07) !important; box-shadow: 0 1px 6px rgba(0,0,0,0.06) !important; }
-[data-testid="stDataFrame"] { border-color: rgba(0,0,0,0.07) !important; }
-[data-testid="stDataFrame"] table thead th { background: #f8fafc !important; color: #64748b !important; }
-[data-testid="stDataFrame"] table tbody tr:nth-child(even) { background: rgba(0,0,0,0.015) !important; }
-[data-testid="stDataFrame"] table tbody tr:hover { background: rgba(37,99,235,0.04) !important; }
-.stButton > button { background: #ffffff !important; color: #334155 !important; border-color: rgba(0,0,0,0.1) !important; }
-.stButton > button:hover { background: rgba(37,99,235,0.06) !important; color: #1d4ed8 !important; border-color: rgba(37,99,235,0.3) !important; }
-details { background: #ffffff !important; border-color: rgba(0,0,0,0.08) !important; }
-hr { border-color: rgba(0,0,0,0.08) !important; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12) !important; }
-</style>
-"""
-
 
 def inject_global_css() -> None:
     """Inject shared CSS + scroll-reveal JS. Call once per page after set_page_config."""
     st.markdown(_CSS, unsafe_allow_html=True)
     st.components.v1.html(_SCROLL_REVEAL_JS, height=0)
-    if st.session_state.get("ne_light_mode"):
-        st.markdown(_LIGHT_CSS, unsafe_allow_html=True)
-
-
-def theme_toggle() -> None:
-    """Render a compact dark/light toggle in the current column/container."""
-    import streamlit.components.v1 as components  # noqa: F401 — already imported above
-    current = st.session_state.get("ne_light_mode", False)
-    label   = "☀ Day" if not current else "🌙 Night"
-    if st.button(label, key="ne_theme_btn", help="Toggle dark / light mode"):
-        st.session_state["ne_light_mode"] = not current
-        st.rerun()
 
 
 def show_loading(message: str, color: str = "#3b82f6"):
@@ -636,7 +587,7 @@ def auth_guard() -> None:
         'border:1px solid rgba(255,255,255,0.07);border-radius:20px;'
         'padding:32px 28px;box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:left;">'
         '<div style="font-size:1.05rem;font-weight:700;color:#e2e8f0;margin-bottom:10px;">'
-        '🔐 Sign in to continue</div>'
+        '\U0001f510 Sign in to continue</div>'
         '<div style="color:#4b5a72;font-size:0.8rem;line-height:1.7;">'
         'Access smart money flows · FII/DII data · Swing &amp; intraday signals · '
         'Your personal trade journal.</div>'
