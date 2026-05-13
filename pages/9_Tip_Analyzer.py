@@ -8,13 +8,13 @@ import hashlib
 import streamlit as st
 
 st.set_page_config(page_title="Tip Analyzer · NiftyEdge", layout="wide", page_icon="🔍")
-from ui.styles import inject_global_css, show_loading, theme_toggle; inject_global_css()
+from ui.styles import inject_global_css, show_loading, auth_guard, user_sidebar; inject_global_css()
+auth_guard()
 with st.sidebar:
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    theme_toggle()
+    user_sidebar()
 
 
-# ── Page header (no <style> block — animations are in ui/styles.py) ────────────
+# ── Page header (no <style> block — animations are in ui/styles.py) ──────────────────────────────────
 st.markdown(
     '<div style="background:linear-gradient(135deg,#0d1117 0%,#161b27 60%,#0d1117 100%);'
     'border:1px solid rgba(255,255,255,0.07);border-radius:20px;'
@@ -35,7 +35,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Sample tips ────────────────────────────────────────────────────────────────
+# ── Sample tips ──────────────────────────────────────────────────────────────────────────────────
 SAMPLE_TIPS = {
     "Select a sample…": "",
     "Suspicious pump tip": (
@@ -57,7 +57,7 @@ SAMPLE_TIPS = {
     ),
 }
 
-# ── Input area ─────────────────────────────────────────────────────────────────
+# ── Input area ──────────────────────────────────────────────────────────────────────────────────
 col_input, col_sample = st.columns([3, 1])
 
 with col_sample:
@@ -100,7 +100,7 @@ if not (tip_text or "").strip():
 if not analyze_btn:
     st.stop()
 
-# ── Run pipeline (cached in session_state by tip hash) ─────────────────────────
+# ── Run pipeline (cached in session_state by tip hash) ─────────────────────────────────────────────────────
 from analysis.tip_analyzer import parse_tip, analyze_tip, get_ai_verdict
 
 tip_hash = hashlib.md5((tip_text or "").strip().encode()).hexdigest()
@@ -138,7 +138,7 @@ parsed      = cached["parsed"]
 analysis    = cached["analysis"]
 ai_verdict  = cached["ai_verdict"]
 
-# ── Verdict banner ─────────────────────────────────────────────────────────────
+# ── Verdict banner ───────────────────────────────────────────────────────────────────────────────────
 verdict       = analysis["verdict"]
 verdict_color = analysis["verdict_color"]
 verdict_icon  = analysis["verdict_icon"]
@@ -175,7 +175,7 @@ st.markdown(
 )
 
 
-# ── Three score cards ──────────────────────────────────────────────────────────
+# ── Three score cards ───────────────────────────────────────────────────────────────────────────────────
 pump_color = "#ff4d6d" if pump_score >= 55 else "#ff9800" if pump_score >= 35 else "#00c896"
 tech_color = "#00c896" if tech_score >= 62 else "#ff9800" if tech_score < 40 else "#f0b429"
 rr_display = f"1:{rr:.1f}" if rr else "N/A"
@@ -233,7 +233,7 @@ with sc3:
 
 st.markdown("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
 
-# ── Parsed tip card + live technical snapshot ──────────────────────────────────
+# ── Parsed tip card + live technical snapshot ──────────────────────────────────────────────────────────────────
 st.markdown("### Parsed Tip Details")
 
 action       = (parsed.get("action") or "BUY").upper()
@@ -278,7 +278,7 @@ def _price_row(label: str, val, ref=None, up_is_good=True) -> str:
 def _ind_row(label: str, value: str, color: str = "#e2e8f0") -> str:
     return (
         f'<div style="display:flex;justify-content:space-between;align-items:center;'
-        f'padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05);">'
+        f'padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05)">'
         f'<span style="font-size:0.82rem;color:#8892a4;">{label}</span>'
         f'<span style="font-weight:700;font-size:0.88rem;color:{color};">{value}</span></div>'
     )
@@ -351,7 +351,7 @@ with det2:
 
 st.markdown("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
 
-# ── Price chart ────────────────────────────────────────────────────────────────
+# ── Price chart ───────────────────────────────────────────────────────────────────────────────────
 with st.expander(f"📊 3-Month Price Chart: {ticker}", expanded=False):
     try:
         import yfinance as yf
@@ -407,7 +407,7 @@ with st.expander(f"📊 3-Month Price Chart: {ticker}", expanded=False):
     except Exception as e:
         st.info(f"Chart unavailable: {e}")
 
-# ── AI Verdict ─────────────────────────────────────────────────────────────────
+# ── AI Verdict ────────────────────────────────────────────────────────────────────────────────────
 st.markdown("### AI Verdict")
 st.markdown(
     '<div style="background:linear-gradient(145deg,#1e2235,#181c2e);'
@@ -422,7 +422,7 @@ st.markdown(
 
 st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
 
-# ── Detailed flags ─────────────────────────────────────────────────────────────
+# ── Detailed flags ───────────────────────────────────────────────────────────────────────────────────
 col_f1, col_f2 = st.columns(2)
 
 with col_f1:
@@ -446,7 +446,7 @@ rr_flag = analysis.get("rr_flag", "")
 if rr_flag:
     st.info(f"**Risk:Reward** — {rr_flag}")
 
-# ── Share card ─────────────────────────────────────────────────────────────────
+# ── Share card ────────────────────────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown("### Share This Analysis")
 

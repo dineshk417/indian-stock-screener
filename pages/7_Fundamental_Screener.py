@@ -9,12 +9,13 @@ from analysis.screener import StockScreener, PRESETS, build_screen_data
 from config.stock_universe import NIFTY_50, NIFTY_200, get_all_sectors, SECTOR_MAP
 
 st.set_page_config(page_title="Fundamental Screener · NiftyEdge", layout="wide", page_icon="🔍")
-from ui.styles import inject_global_css, page_header, theme_toggle; inject_global_css()
+from ui.styles import inject_global_css, page_header, auth_guard, user_sidebar; inject_global_css()
+auth_guard()
 
-# ── PAGE HEADER ────────────────────────────────────────────────────────────────
+# ── PAGE HEADER ───────────────────────────────────────────────────────────────────────────────
 page_header("🔍 Fundamental Screener", subtitle="NSE · Equity · Fundamentals")
 
-# ── SIDEBAR FILTERS ────────────────────────────────────────────────────────────
+# ── SIDEBAR FILTERS ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
 
@@ -59,8 +60,8 @@ with st.sidebar:
     run_btn = st.button("🔍 Run Screener", type="primary", width="stretch")
 
     st.divider()
-    theme_toggle()
-# ── PRESET CARDS ──────────────────────────────────────────────────────────────
+    user_sidebar()
+# ── PRESET CARDS ─────────────────────────────────────────────────────────────────────────────
 PRESET_CARDS = [
     {"key": "Value Picks",         "icon": "💎", "color": "#f0b429", "rgb": "240,180,41",
      "desc": "Low PE, high ROE, quality balance sheet"},
@@ -94,7 +95,7 @@ for col, pc in zip(preset_cols, PRESET_CARDS):
 
 st.markdown('<div style="margin-bottom:16px;"></div>', unsafe_allow_html=True)
 
-# ── FETCH DATA ─────────────────────────────────────────────────────────────────
+# ── FETCH DATA ────────────────────────────────────────────────────────────────────────────────
 if "fundamental_df" not in st.session_state:
     st.session_state.fundamental_df = None
 
@@ -121,7 +122,7 @@ if fund_df is None or fund_df.empty:
     st.error("No data available. Try running the screener.")
     st.stop()
 
-# ── APPLY FILTERS ─────────────────────────────────────────────────────────────
+# ── APPLY FILTERS ─────────────────────────────────────────────────────────────────────────────
 if selected_sector != "All":
     fund_df = fund_df[fund_df["sector"] == selected_sector]
 
@@ -138,7 +139,7 @@ else:
     screener.set_sort(sort_col, ascending=sort_asc)
     result_df = screener.run(fund_df)
 
-# ── STATS STRIP ───────────────────────────────────────────────────────────────
+# ── STATS STRIP ─────────────────────────────────────────────────────────────────────────────
 avg_pe  = result_df["pe"].dropna().mean()       if "pe"           in result_df.columns else None
 avg_roe = result_df["roe_pct"].dropna().mean()  if "roe_pct"      in result_df.columns else None
 avg_div = result_df["div_yield_pct"].dropna().mean() if "div_yield_pct" in result_df.columns else None
@@ -181,7 +182,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── CLASSIFICATION CHIPS ──────────────────────────────────────────────────────
+# ── CLASSIFICATION CHIPS ─────────────────────────────────────────────────────────────────────────────────
 if not result_df.empty and "classification" in result_df.columns:
     _CLS_COLORS = {
         "Fairly Valued": "#f0b429", "Undervalued": "#00c896",
@@ -212,7 +213,7 @@ if result_df.empty:
     )
     st.stop()
 
-# ── RESULTS TABLE ─────────────────────────────────────────────────────────────
+# ── RESULTS TABLE ─────────────────────────────────────────────────────────────────────────────
 st.markdown(
     f'<div style="font-size:0.68rem;font-weight:700;color:#475569;'
     f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">'
@@ -227,7 +228,7 @@ display_cols = [c for c in [
 ] if c in result_df.columns]
 st.dataframe(result_df[display_cols], hide_index=True, use_container_width=True)
 
-# ── STOCK DETAIL ──────────────────────────────────────────────────────────────
+# ── STOCK DETAIL ────────────────────────────────────────────────────────────────────────────────
 st.markdown('<div style="margin-top:8px;"></div>', unsafe_allow_html=True)
 st.markdown(
     '<div style="font-size:0.68rem;font-weight:700;color:#475569;'
