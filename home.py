@@ -311,20 +311,25 @@ with t_home:
     _qs   = _quick_stats()
     _sm   = _smart_money_today()
 
-    _fii_net    = _sm["fii_net"]
-    _fii_color  = "#00c896" if (_fii_net or 0) >= 0 else "#ff4d6d"
-    _fii_rgb    = "0,200,150" if (_fii_net or 0) >= 0 else "255,77,109"
-    _fii_arrow  = "▲" if (_fii_net or 0) >= 0 else "▼"
-    _fii_label  = (f"{_fii_arrow} ₹{abs(_fii_net):,.0f} Cr" if _fii_net is not None
-                   else "No cache yet")
-    _fii_sub    = "FII/FPI Net Flow · Latest" if _fii_net is not None else "Updated daily at 8:30 AM IST"
-    _bulk_line  = (f"Bulk: <b>{_sm['bulk_ticker']}</b> — {_sm['bulk_entity']}"
-                   if _sm["bulk_ticker"] else "No bulk deals in cache")
+    _fii_net = _sm["fii_net"]
+    if _fii_net is not None:
+        _fii_color = "#00c896" if _fii_net >= 0 else "#ff4d6d"
+        _fii_rgb   = "0,200,150" if _fii_net >= 0 else "255,77,109"
+        _fii_label = f'{"▲" if _fii_net >= 0 else "▼"} ₹{abs(_fii_net):,.0f} Cr'
+        _fii_sub   = "FII/FPI Net Flow · Latest"
+    else:
+        _fii_color = "#64748b"
+        _fii_rgb   = "100,116,139"
+        _fii_label = "—"
+        _fii_sub   = "FII/FPI Net Flow · Updated at market open"
+    _bulk_line = (f"Bulk: <b>{_sm['bulk_ticker']}</b> — {_sm['bulk_entity']}"
+                  if _sm["bulk_ticker"] else "Track institutional bulk &amp; block deals")
 
     _wr   = _qs["wr"]
     _wr_c = "#00c896" if _wr >= 55 else "#f0b429" if _wr >= 40 else "#ff4d6d"
     _open = _qs["open"]
     _tot  = _qs["total"]
+    _open_str = f'{_open} open position{"s" if _open != 1 else ""}'
 
     vp_col1, vp_col2, vp_col3 = st.columns(3)
 
@@ -360,7 +365,7 @@ with t_home:
             f'<div style="font-size:0.62rem;color:#64748b;margin-top:4px;margin-bottom:10px;">'
             f'Win Rate · Last 30 days</div>'
             f'<div style="font-size:0.7rem;color:#94a3b8;margin-bottom:12px;">'
-            f'{_open} open position{{"s" if _open != 1 else ""}} &nbsp;·&nbsp; {_tot} total signals</div>'
+            f'{_open_str} &nbsp;·&nbsp; {_tot} total signals</div>'
             f'<a href="/Signal_Log" style="font-size:0.7rem;font-weight:600;color:#8b5cf6;'
             f'text-decoration:none;">P&amp;L · Strategy Breakdown · CSV →</a>'
             f'</div>',
