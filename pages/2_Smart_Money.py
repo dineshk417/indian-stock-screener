@@ -15,6 +15,7 @@ from data.smart_money import (
     fetch_block_deals,
     fetch_fii_dii_flow,
     fetch_insider_trades,
+    fetch_insider_trades_yfinance,
     fetch_institutional_holders,
 )
 from config.stock_universe import NIFTY_50
@@ -377,15 +378,54 @@ with tab_flow:
 with tab_insider:
     _ins_slot = show_loading("Loading insider &amp; promoter trade disclosures (SEBI PIT regulations)…", "#7c83fd")
     insider_df = fetch_insider_trades(days_back)
+    _insider_source = "nse"
+
+    if insider_df.empty:
+        # NSE/BSE APIs are blocked from GitHub Actions IPs — fall back to Yahoo Finance
+        # which sources SEBI PIT disclosures for major NSE stocks via its own data pipeline.
+        _ins_slot.markdown(
+            '<div style="color:#94a3b8;font-size:0.78rem;padding:4px 0;">'
+            '⚡ Cache empty — fetching insider data from Yahoo Finance (Nifty 50)…</div>',
+            unsafe_allow_html=True,
+        )
+        _n50_tickers = tuple(NIFTY_50.values())
+        insider_df = fetch_insider_trades_yfinance(_n50_tickers, days_back)
+        _insider_source = "yahoo"
+
     _ins_slot.empty()
 
     if insider_df.empty:
         _empty(
-            "No insider trade data in cache",
-            "Run the 'Smart Money Daily Data Fetch' GitHub Actions job to populate the cache.",
+            "No insider trade data available",
+            "NSE/BSE APIs are Cloudflare-protected and blocked from GitHub Actions IPs. "
+            "Yahoo Finance also returned no data for Nifty 50 stocks in this period. "
+            "Try a longer period (60 days) or trigger the GitHub Actions job manually.",
         )
     else:
         insider_df = _type_col(insider_df, "Txn")
+
+        # Source banner
+        if _insider_source == "yahoo":
+            st.markdown(
+                '<div style="background:rgba(124,131,253,0.07);border:1px solid rgba(124,131,253,0.2);'
+                'border-left:3px solid #7c83fd;border-radius:8px;padding:8px 14px;margin-bottom:14px;'
+                'font-size:0.76rem;color:#94a3b8;">'
+                '<span style="color:#7c83fd;font-weight:700;">SOURCE · Yahoo Finance</span>'
+                '&nbsp;·&nbsp;SEBI PIT disclosures for Nifty 50 stocks via Yahoo Finance data pipeline. '
+                'Coverage is best for large-caps. Value in ₹ Cr (Yahoo reports INR for .NS tickers). '
+                'Run the <b>Smart Money Daily Data Fetch</b> GitHub Action for full NSE/BSE coverage.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div style="display:inline-block;background:rgba(0,200,150,0.07);'
+                'border:1px solid rgba(0,200,150,0.2);border-radius:6px;'
+                'padding:3px 10px;font-size:0.68rem;font-weight:700;'
+                'color:#00c896;letter-spacing:0.06em;margin-bottom:12px;">'
+                'SOURCE · NSE / BSE SEBI PIT Disclosures</div>',
+                unsafe_allow_html=True,
+            )
 
         _n_buy  = int(insider_df["Txn"].str.upper().str.contains("BUY|ACQUI", na=False).sum()) if "Txn" in insider_df.columns else 0
         _n_sell = len(insider_df) - _n_buy

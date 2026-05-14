@@ -8,7 +8,14 @@ Streamlit Cloud reads the JSON file — never hits NSE directly.
 Sources (tried in order):
   Bulk/Block deals : NSE archive CDN CSV → NSE interactive API
   FII/DII flow     : NSE archive dated CSVs → NSE API
-  Insider trades   : BSE API (SAST) → NSE API
+  Insider trades   : NSE API → BSE API → NSE archive CSVs → yfinance (Yahoo Finance)
+
+Why NSE/BSE insider APIs fail:
+  Both sit behind Cloudflare WAF. Their APIs require session cookies established
+  by visiting the website first, which triggers a JS challenge that GitHub Actions
+  IPs cannot pass. The NSE archive CDN (nsearchives.nseindia.com) serves static
+  files for bulk/block but has no equivalent for insider trades.
+  yfinance (Yahoo Finance) is the reliable fallback — no IP restriction.
 """
 from __future__ import annotations
 
@@ -444,6 +451,88 @@ def _try_bse_insider(endpoint: str, from_dt: date, to_dt: date) -> list[dict]:
     return []
 
 
+# Nifty 50 tickers in yfinance format — used for the Yahoo Finance fallback.
+# Duplicated here so this script has no dependency on the app's config module.
+_NIFTY50_YF = [
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "BHARTIARTL.NS", "ICICIBANK.NS",
+    "INFY.NS", "SBIN.NS", "HINDUNILVR.NS", "ITC.NS", "LT.NS",
+    "KOTAKBANK.NS", "AXISBANK.NS", "BAJFINANCE.NS", "ASIANPAINT.NS", "MARUTI.NS",
+    "TITAN.NS", "SUNPHARMA.NS", "ULTRACEMCO.NS", "WIPRO.NS", "NESTLEIND.NS",
+    "POWERGRID.NS", "NTPC.NS", "ONGC.NS", "M&M.NS", "BAJAJFINSV.NS",
+    "HCLTECH.NS", "ADANIENT.NS", "ADANIPORTS.NS", "TATAMOTORS.NS", "TATASTEEL.NS",
+    "HINDALCO.NS", "JSWSTEEL.NS", "COALINDIA.NS", "BPCL.NS", "DRREDDY.NS",
+    "CIPLA.NS", "DIVISLAB.NS", "APOLLOHOSP.NS", "BRITANNIA.NS", "EICHERMOT.NS",
+    "HEROMOTOCO.NS", "BAJAJ-AUTO.NS", "TECHM.NS", "INDUSINDBK.NS", "GRASIM.NS",
+    "SHREECEM.NS", "TATACONSUM.NS", "SBILIFE.NS", "HDFCLIFE.NS", "LTF.NS",
+]
+
+_YF_INSIDER_COL_MAP = {
+    "filerName":              "person",
+    "filerRelation":          "category",
+    "transactionDescription": "txn",
+    "startDate":              "disclosed",
+    "shares":                 "shares",
+    "value":                  "_val",
+    "Insider":    "person",
+    "Relation":   "category",
+    "Position":   "category",
+    "Transaction": "txn",
+    "Text":       "txn",
+    "Date":       "disclosed",
+    "Start Date": "disclosed",
+    "#Shares":    "shares",
+    "Value":      "_val",
+}
+
+
+def _fetch_insider_yfinance() -> list[dict]:
+    """Fetch insider trades for Nifty 50 via Yahoo Finance as last-resort fallback."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        log.warning("  insider yfinance: yfinance not installed, skipping")
+        return []
+
+    cutoff = (date.today() - timedelta(days=DAYS_BACK)).isoformat()
+    rows: list[dict] = []
+
+    for ticker in _NIFTY50_YF:
+        try:
+            raw = yf.Ticker(ticker).insider_transactions
+            if raw is None or raw.empty:
+                continue
+
+            df = raw.copy()
+            df.columns = [str(c) for c in df.columns]
+            rename = {c: _YF_INSIDER_COL_MAP[c] for c in df.columns if c in _YF_INSIDER_COL_MAP}
+            df = df.rename(columns=rename)
+
+            if "disclosed" not in df.columns:
+                continue
+
+            df["disclosed"] = pd.to_datetime(df["disclosed"], errors="coerce").dt.strftime("%Y-%m-%d")
+            df = df[df["disclosed"] >= cutoff]
+            if df.empty:
+                continue
+
+            sym = ticker.replace(".NS", "")
+            if "_val" in df.columns:
+                df["value_cr"] = (pd.to_numeric(df["_val"], errors="coerce") / 1e7).round(2)
+                df = df.drop(columns=["_val"])
+
+            df["symbol"] = sym
+            if "company" not in df.columns:
+                df["company"] = sym
+
+            rows.extend(df.where(pd.notna(df), None).to_dict("records"))
+            time.sleep(0.25)
+        except Exception as exc:
+            log.debug("  insider yfinance %s: %s", ticker, exc)
+
+    log.info("  insider yfinance: %d rows across %d Nifty50 tickers", len(rows), len(_NIFTY50_YF))
+    return rows
+
+
 def fetch_insider_trades() -> list[dict]:
     log.info("Fetching insider trades…")
     today   = date.today()
@@ -485,24 +574,42 @@ def fetch_insider_trades() -> list[dict]:
     if rows:
         return rows
 
-    # 4. NSE archive CSV (no cookies needed — static file)
+    # 4. NSE archive CDN static files — these bypass Cloudflare (no session needed).
+    #    Bulk/block CSVs work via this CDN; we try all plausible insider paths.
+    _today_ddmmyyyy = today.strftime("%d%m%Y")
+    _today_ddmmyy   = today.strftime("%d%m%y")
     for csv_url in [
         "https://nsearchives.nseindia.com/corporates/insiderTrading.csv",
         "https://nsearchives.nseindia.com/corporates/pit/pitDisclosures.csv",
+        "https://nsearchives.nseindia.com/corporates/equity/insider.csv",
+        "https://nsearchives.nseindia.com/corporates/pit.csv",
+        f"https://nsearchives.nseindia.com/corporates/pit/{_today_ddmmyyyy}.csv",
+        f"https://nsearchives.nseindia.com/corporates/equity/insider{_today_ddmmyyyy}.csv",
+        "https://nsearchives.nseindia.com/corporates/equity/insiderTrading.csv",
+        "https://nsearchives.nseindia.com/corporates/corporateActions/insider.csv",
     ]:
         r = _plain_get(csv_url, timeout=12)
         if r and len(r.content) > 200:
             try:
                 df = pd.read_csv(io.StringIO(r.text))
-                log.info("  insider archive CSV cols: %s", list(df.columns)[:12])
-                rows = _normalise_insider(df, _NSE_INSIDER_COLS)
-                if rows:
-                    log.info("  insider: %d rows from NSE archive %s", len(rows), csv_url)
-                    return rows
+                log.info("  insider archive CSV %s cols: %s", csv_url.split("/")[-1], list(df.columns)[:12])
+                # Try both NSE and BSE column maps
+                for col_map in (_NSE_INSIDER_COLS, _BSE_INSIDER_COLS):
+                    rows = _normalise_insider(df, col_map)
+                    if rows:
+                        log.info("  insider: %d rows from NSE archive %s", len(rows), csv_url)
+                        return rows
             except Exception as exc:
                 log.debug("  insider archive CSV %s: %s", csv_url, exc)
 
-    log.warning("  insider: no data from any source")
+    # 5. Yahoo Finance — reliable fallback, no IP restrictions.
+    #    Sources SEBI PIT disclosures for Nifty 50 stocks via Yahoo's data pipeline.
+    rows = _fetch_insider_yfinance()
+    if rows:
+        log.info("  insider: %d rows from Yahoo Finance fallback", len(rows))
+        return rows
+
+    log.warning("  insider: no data from any source (NSE/BSE Cloudflare-blocked, Yahoo empty)")
     return []
 
 

@@ -4,7 +4,9 @@ Smart Money data layer — reads from the daily JSON cache.
 The cache is populated by scripts/fetch_smart_money.py, which runs from
 GitHub Actions (unblocked IPs) every morning at 8:30 AM IST.
 
-Streamlit Cloud never calls NSE directly.
+Streamlit Cloud never calls NSE directly — EXCEPT for yfinance-based fetches
+(Yahoo Finance, not NSE/BSE) which are used as live fallbacks when the cache
+has no insider trade data.
 """
 from __future__ import annotations
 
@@ -19,6 +21,27 @@ import streamlit as st
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+# Column name variants yfinance uses across versions for insider_transactions
+_YF_INSIDER_COL_MAP: dict[str, str] = {
+    # yfinance ≥0.2 API format
+    "filerName":              "Person",
+    "filerRelation":          "Category",
+    "transactionDescription": "Txn",
+    "startDate":              "Disclosed",
+    "shares":                 "Shares",
+    "value":                  "_value_raw",
+    # Older / formatted column names
+    "Insider":      "Person",
+    "Relation":     "Category",
+    "Position":     "Category",
+    "Transaction":  "Txn",
+    "Text":         "Txn",
+    "Date":         "Disclosed",
+    "Start Date":   "Disclosed",
+    "#Shares":      "Shares",
+    "Value":        "_value_raw",
+}
 
 _CACHE_PATH = Path(__file__).parent / "smart_money_cache.json"
 
@@ -109,6 +132,62 @@ def fetch_insider_trades(days: int = 30) -> pd.DataFrame:
         "to_date":    "To",
     })
     return df
+
+
+# ── Insider Trades — live Yahoo Finance fallback ───────────────────────────────
+# Used when the daily cache has no insider data (NSE/BSE APIs blocked on GH Actions).
+# Yahoo Finance sources SEBI disclosures for major NSE stocks; coverage is best
+# for Nifty 50 large-caps.  Value is reported in INR by Yahoo for .NS tickers.
+
+@st.cache_data(ttl=14400, show_spinner=False)
+def fetch_insider_trades_yfinance(tickers: tuple[str, ...], days: int = 30) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+
+    for ticker in tickers:
+        try:
+            raw = yf.Ticker(ticker).insider_transactions
+            if raw is None or raw.empty:
+                continue
+
+            df = raw.copy()
+            df.columns = [str(c) for c in df.columns]
+
+            # Rename columns to canonical names, handling both yfinance API versions
+            rename = {c: _YF_INSIDER_COL_MAP[c] for c in df.columns if c in _YF_INSIDER_COL_MAP}
+            df = df.rename(columns=rename)
+
+            if "Disclosed" not in df.columns:
+                continue
+
+            df["Disclosed"] = pd.to_datetime(df["Disclosed"], errors="coerce")
+            df = df[df["Disclosed"] >= cutoff]
+            if df.empty:
+                continue
+
+            # Value: Yahoo Finance reports INR for .NS tickers; convert to Crore
+            if "_value_raw" in df.columns:
+                df["Value ₹ Cr"] = (
+                    pd.to_numeric(df["_value_raw"], errors="coerce") / 1e7
+                ).round(2)
+                df = df.drop(columns=["_value_raw"])
+
+            sym = ticker.replace(".NS", "")
+            df["Symbol"] = sym
+            if "Company" not in df.columns:
+                df["Company"] = sym
+
+            frames.append(df)
+        except Exception as exc:
+            logger.debug("yfinance insider %s: %s", ticker, exc)
+
+    if not frames:
+        return pd.DataFrame()
+
+    out = pd.concat(frames, ignore_index=True)
+    # Ensure Disclosed is datetime for consistent downstream handling
+    out["Disclosed"] = pd.to_datetime(out["Disclosed"], errors="coerce")
+    return out
 
 
 # ── Institutional Holders (yfinance — always live, already works) ──────────────
