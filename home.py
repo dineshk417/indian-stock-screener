@@ -162,33 +162,6 @@ def _top_news():
         return []
 
 
-@st.cache_data(ttl=1800, show_spinner=False)
-def _smart_money_today():
-    result = {"fii_net": None, "bulk_ticker": None, "bulk_entity": None}
-    try:
-        from data.smart_money import fetch_fii_dii_flow
-        fii = fetch_fii_dii_flow(days=7)
-        if not fii.empty and "Net ₹Cr" in fii.columns and "Category" in fii.columns:
-            mask = fii["Category"].astype(str).str.upper().str.contains("FII|FPI", na=False)
-            fii_rows = fii[mask]
-            if not fii_rows.empty:
-                row = (fii_rows.sort_values("Date", ascending=False).iloc[0]
-                       if "Date" in fii_rows.columns else fii_rows.iloc[0])
-                result["fii_net"] = float(row["Net ₹Cr"])
-    except Exception:
-        pass
-    try:
-        from data.smart_money import fetch_bulk_deals
-        bulk = fetch_bulk_deals(days=5)
-        if not bulk.empty:
-            row = (bulk.sort_values("Date", ascending=False).iloc[0]
-                   if "Date" in bulk.columns else bulk.iloc[0])
-            result["bulk_ticker"] = str(row.get("Symbol", ""))
-            result["bulk_entity"] = str(row.get("Entity", row.get("Name", "")))[:28]
-    except Exception:
-        pass
-    return result
-
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -305,92 +278,54 @@ t_home, t_signals, t_news, t_screener, t_tools = st.tabs([
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with t_home:
 
-    # ── Value Proposition Strip ────────────────────────────────────────────────
-    # The three things Kite/Groww don't give you: institutional flow,
-    # strategy-level journal analytics, and tip scam detection.
-    _qs   = _quick_stats()
-    _sm   = _smart_money_today()
-
-    _fii_net = _sm["fii_net"]
-    if _fii_net is not None:
-        _fii_color = "#00c896" if _fii_net >= 0 else "#ff4d6d"
-        _fii_rgb   = "0,200,150" if _fii_net >= 0 else "255,77,109"
-        _fii_label = f'{"▲" if _fii_net >= 0 else "▼"} ₹{abs(_fii_net):,.0f} Cr'
-        _fii_sub   = "FII/FPI Net Flow · Latest"
-    else:
-        _fii_color = "#64748b"
-        _fii_rgb   = "100,116,139"
-        _fii_label = "—"
-        _fii_sub   = "FII/FPI Net Flow · Updated at market open"
-    _bulk_line = (f"Bulk: <b>{_sm['bulk_ticker']}</b> — {_sm['bulk_entity']}"
-                  if _sm["bulk_ticker"] else "Track institutional bulk &amp; block deals")
-
-    _wr   = _qs["wr"]
-    _wr_c = "#00c896" if _wr >= 55 else "#f0b429" if _wr >= 40 else "#ff4d6d"
-    _open = _qs["open"]
-    _tot  = _qs["total"]
-    _open_str = f'{_open} open position{"s" if _open != 1 else ""}'
-
-    vp_col1, vp_col2, vp_col3 = st.columns(3)
-
-    with vp_col1:
+    # ── AI Features Strip ──────────────────────────────────────────────────────
+    ai_c1, ai_c2 = st.columns(2)
+    with ai_c1:
         st.markdown(
-            f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
-            f'border:1px solid rgba({_fii_rgb},0.18);border-left:4px solid #f59e0b;'
-            f'border-radius:14px;padding:18px 20px;height:100%;">'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#f59e0b;'
-            f'text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">'
-            f'💰 Smart Money Today</div>'
-            f'<div style="font-size:1.6rem;font-weight:900;color:{_fii_color};'
-            f'letter-spacing:-0.02em;line-height:1;">{_fii_label}</div>'
-            f'<div style="font-size:0.62rem;color:#64748b;margin-top:4px;margin-bottom:10px;">'
-            f'{_fii_sub}</div>'
-            f'<div style="font-size:0.7rem;color:#94a3b8;margin-bottom:12px;">{_bulk_line}</div>'
-            f'<a href="/Smart_Money" style="font-size:0.7rem;font-weight:600;color:#f59e0b;'
-            f'text-decoration:none;">FII · DII · Bulk · Insider →</a>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    with vp_col2:
-        st.markdown(
-            f'<div style="background:linear-gradient(145deg,#131929,#0f1420);'
-            f'border:1px solid rgba(139,92,246,0.18);border-left:4px solid #8b5cf6;'
-            f'border-radius:14px;padding:18px 20px;height:100%;">'
-            f'<div style="font-size:0.58rem;font-weight:700;color:#8b5cf6;'
-            f'text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">'
-            f'📋 Your Signal Journal</div>'
-            f'<div style="font-size:1.6rem;font-weight:900;color:{_wr_c};'
-            f'letter-spacing:-0.02em;line-height:1;">{_wr}%</div>'
-            f'<div style="font-size:0.62rem;color:#64748b;margin-top:4px;margin-bottom:10px;">'
-            f'Win Rate · Last 30 days</div>'
-            f'<div style="font-size:0.7rem;color:#94a3b8;margin-bottom:12px;">'
-            f'{_open_str} &nbsp;·&nbsp; {_tot} total signals</div>'
-            f'<a href="/Signal_Log" style="font-size:0.7rem;font-weight:600;color:#8b5cf6;'
-            f'text-decoration:none;">P&amp;L · Strategy Breakdown · CSV →</a>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    with vp_col3:
-        st.markdown(
-            '<div style="background:linear-gradient(145deg,#131929,#0f1420);'
-            'border:1px solid rgba(255,77,109,0.18);border-left:4px solid #ff4d6d;'
-            'border-radius:14px;padding:18px 20px;height:100%;">'
-            '<div style="font-size:0.58rem;font-weight:700;color:#ff4d6d;'
-            'text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">'
-            '🛡️ Scam Detector</div>'
-            '<div style="font-size:1rem;font-weight:800;color:#f1f5f9;line-height:1.3;margin-bottom:6px;">'
-            'Got a hot tip on Telegram?</div>'
-            '<div style="font-size:0.72rem;color:#64748b;line-height:1.5;margin-bottom:12px;">'
-            'AI scores pump-and-dump risk, operator activity &amp; volume anomalies '
-            'before you put money in.</div>'
-            '<a href="/Tip_Analyzer" style="font-size:0.7rem;font-weight:600;color:#ff4d6d;'
-            'text-decoration:none;">Analyze a Tip →</a>'
+            '<div style="background:linear-gradient(145deg,#150d2a,#0f1420);'
+            'border:1px solid rgba(139,92,246,0.25);border-left:4px solid #8b5cf6;'
+            'border-radius:14px;padding:22px 24px;">'
+            '<div style="font-size:0.58rem;font-weight:700;color:#8b5cf6;'
+            'text-transform:uppercase;letter-spacing:0.14em;margin-bottom:10px;">'
+            '✦ AI-Powered</div>'
+            '<div style="font-size:1.2rem;font-weight:800;color:#f1f5f9;'
+            'line-height:1.3;margin-bottom:10px;">Ask AI About Any Stock</div>'
+            '<div style="font-size:0.75rem;color:#64748b;line-height:1.7;margin-bottom:18px;">'
+            'Instant trade analysis — trend direction, key support &amp; resistance, '
+            'entry zone, stop loss &amp; targets. Like a research analyst on demand, '
+            'free and available 24/7.</div>'
+            '<a href="/AI_Analyst" style="display:inline-flex;align-items:center;gap:6px;'
+            'font-size:0.78rem;font-weight:700;color:#8b5cf6;text-decoration:none;">'
+            'Analyse a Stock'
+            '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor"'
+            ' stroke-width="2.5" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>'
+            '</a>'
             '</div>',
             unsafe_allow_html=True,
         )
-
+    with ai_c2:
+        st.markdown(
+            '<div style="background:linear-gradient(145deg,#0d1f18,#0f1420);'
+            'border:1px solid rgba(34,197,94,0.25);border-left:4px solid #22c55e;'
+            'border-radius:14px;padding:22px 24px;">'
+            '<div style="font-size:0.58rem;font-weight:700;color:#22c55e;'
+            'text-transform:uppercase;letter-spacing:0.14em;margin-bottom:10px;">'
+            '✦ AI-Powered</div>'
+            '<div style="font-size:1.2rem;font-weight:800;color:#f1f5f9;'
+            'line-height:1.3;margin-bottom:10px;">Portfolio Health Check</div>'
+            '<div style="font-size:0.75rem;color:#64748b;line-height:1.7;margin-bottom:18px;">'
+            'Enter your holdings and get AI feedback — sector concentration, '
+            'positions breaching key levels, P&amp;L breakdown &amp; '
+            'a plain-English verdict on what to do next.</div>'
+            '<a href="/Portfolio_Health" style="display:inline-flex;align-items:center;gap:6px;'
+            'font-size:0.78rem;font-weight:700;color:#22c55e;text-decoration:none;">'
+            'Check My Portfolio'
+            '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor"'
+            ' stroke-width="2.5" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>'
+            '</a>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
     st.markdown('<div style="margin-bottom:20px;"></div>', unsafe_allow_html=True)
 
     # ── Best Trades Right Now ───────────────────────────────────────────────────

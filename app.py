@@ -105,6 +105,8 @@ pg = st.navigation(
         st.Page("pages/7_Fundamental_Screener.py",  title="Fundamental Screener", icon="📊"),
         st.Page("pages/8_News_Sentiment.py",        title="News & Sentiment",     icon="📰"),
         st.Page("pages/9_Tip_Analyzer.py",          title="Tip Analyzer",         icon="🛡️"),
+        st.Page("pages/10_AI_Analyst.py",           title="AI Analyst",           icon="🤖"),
+        st.Page("pages/11_Portfolio_Health.py",     title="Portfolio Health",     icon="📊"),
     ],
     position="sidebar",
 )
