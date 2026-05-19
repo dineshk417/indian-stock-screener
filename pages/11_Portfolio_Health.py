@@ -343,7 +343,7 @@ if run_btn:
 
     import google.generativeai as genai
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     prompt_text = _build_prompt(holdings, prices)
 
     def _stream():
