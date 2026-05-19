@@ -6,16 +6,16 @@ each open signal hit its target, stopped out, or was squared off / expired.
 
 Resolution logic
 ----------------
-LONG signals:
-  Stop takes priority on the same candle (conservative).
-  STOPPED       : candle Low  <= stop_loss
-  TARGET2_HIT   : candle High >= target_2  (checked after stop)
-  TARGET1_HIT   : candle High >= target_1
+INTRADAY signals (5-min candles — use_close_for_sl=False):
+  Stop checked against candle Low/High — triggered by any intraday touch.
+  LONG  → STOPPED if Low <= SL | TARGET2 if High >= T2 | TARGET1 if High >= T1
+  SHORT → STOPPED if High >= SL | TARGET2 if Low <= T2 | TARGET1 if Low <= T1
 
-SHORT signals:
-  STOPPED       : candle High >= stop_loss
-  TARGET2_HIT   : candle Low  <= target_2
-  TARGET1_HIT   : candle Low  <= target_1
+SWING signals (daily candles — use_close_for_sl=True):
+  Stop checked against daily CLOSE to avoid false stops from intraday wicks.
+  A candle whose Low dips below SL but closes above it keeps the position open.
+  LONG  → STOPPED if Close <= SL | TARGET2 if High >= T2 | TARGET1 if High >= T1
+  SHORT → STOPPED if Close >= SL | TARGET2 if Low <= T2  | TARGET1 if Low <= T1
 
 End-of-day rules
 ----------------
@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 IST = pytz.timezone("Asia/Kolkata")
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────
 
 def _pnl_r(entry: float, stop: float, exit_price: float, direction: str) -> float:
     """Gross risk-normalised P&L (R-multiple), before costs."""
@@ -78,9 +78,15 @@ def _resolve_candles(
     target_1: float,
     target_2: float,
     from_dt: Optional[datetime] = None,
+    use_close_for_sl: bool = False,
 ) -> Optional[dict]:
     """
     Walk candles in chronological order and return the first triggered outcome.
+
+    use_close_for_sl=True  → daily candles (swing): only stop out if the day's
+                             CLOSE breaches the SL level. Prevents intraday wicks
+                             from killing positions that close back above the stop.
+    use_close_for_sl=False → intraday candles (5-min): use High/Low as usual.
 
     Returns a dict with: outcome, price, at, max_gain_pct, max_loss_pct, pnl_r
     or None if no trigger found within the provided candles.
@@ -105,21 +111,27 @@ def _resolve_candles(
     min_low  = entry
 
     for ts, row in df.iterrows():
-        high = float(row["High"])
-        low  = float(row["Low"])
+        high  = float(row["High"])
+        low   = float(row["Low"])
+        close = float(row["Close"])
         max_high = max(max_high, high)
         min_low  = min(min_low, low)
 
         if direction == "LONG":
-            if low <= stop_loss:
-                return _result(OUTCOME_STOPPED, stop_loss, ts, entry, max_high, min_low, direction)
+            # SL: use close on daily candles so intraday wicks don't falsely stop out
+            sl_hit   = (close <= stop_loss) if use_close_for_sl else (low <= stop_loss)
+            sl_price = close if use_close_for_sl else stop_loss
+            if sl_hit:
+                return _result(OUTCOME_STOPPED, sl_price, ts, entry, max_high, min_low, direction)
             if high >= target_2:
                 return _result(OUTCOME_TARGET2, target_2, ts, entry, max_high, min_low, direction)
             if high >= target_1:
                 return _result(OUTCOME_TARGET1, target_1, ts, entry, max_high, min_low, direction)
         else:  # SHORT
-            if high >= stop_loss:
-                return _result(OUTCOME_STOPPED, stop_loss, ts, entry, max_high, min_low, direction)
+            sl_hit   = (close >= stop_loss) if use_close_for_sl else (high >= stop_loss)
+            sl_price = close if use_close_for_sl else stop_loss
+            if sl_hit:
+                return _result(OUTCOME_STOPPED, sl_price, ts, entry, max_high, min_low, direction)
             if low <= target_2:
                 return _result(OUTCOME_TARGET2, target_2, ts, entry, max_high, min_low, direction)
             if low <= target_1:
@@ -145,7 +157,7 @@ def _result(outcome: str, price: float, ts, entry: float, max_high: float, min_l
     }
 
 
-# ── Intraday resolver ──────────────────────────────────────────────────────────
+# ── Intraday resolver ────────────────────────────────────────────────────────
 
 def _resolve_intraday(signal: dict) -> Optional[dict]:
     """
@@ -247,7 +259,7 @@ def _resolve_intraday(signal: dict) -> Optional[dict]:
     return None  # market still open; no trigger yet
 
 
-# ── Swing resolver ─────────────────────────────────────────────────────────────
+# ── Swing resolver ──────────────────────────────────────────────────────────────
 
 def _resolve_swing(signal: dict) -> Optional[dict]:
     """
@@ -297,6 +309,7 @@ def _resolve_swing(signal: dict) -> Optional[dict]:
         stop_loss=signal["stop_loss"],
         target_1=signal["target_1"],
         target_2=signal["target_2"],
+        use_close_for_sl=True,
     )
     if result:
         result["pnl_r"] = _pnl_r(
