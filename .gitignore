@@ -3,5 +3,6 @@ data_store/
 __pycache__/
 *.pyc
 *.pyo
+*.db
 .DS_Store
 .streamlit/secrets.toml
