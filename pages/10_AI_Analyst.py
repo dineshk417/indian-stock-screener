@@ -20,7 +20,7 @@ with st.sidebar:
     user_sidebar()
 
 
-# ── Technical helpers ──────────────────────────────────────────────────────────
+# ── Technical helpers ──────────────────────────────────────────────
 
 def _rsi(prices: pd.Series, n: int = 14) -> float:
     d = prices.diff().dropna()
@@ -165,7 +165,7 @@ def _universe():
     return stocks
 
 
-# ── Page ───────────────────────────────────────────────────────────────────────
+# ── Page ───────────────────────────────────────────────────────────────────
 st.markdown(
     '<div style="margin-bottom:4px;">'
     '<span style="font-size:1.55rem;font-weight:900;color:#f1f5f9;letter-spacing:-0.03em;">'
@@ -192,10 +192,10 @@ if go and chosen:
     if not ticker_ns.endswith(".NS"):
         ticker_ns += ".NS"
 
-    api_key = (os.environ.get("ANTHROPIC_API_KEY") or
-               st.secrets.get("ANTHROPIC_API_KEY", ""))
+    api_key = (os.environ.get("GEMINI_API_KEY") or
+               st.secrets.get("GEMINI_API_KEY", ""))
     if not api_key:
-        st.error("ANTHROPIC_API_KEY not set — add it to Streamlit Cloud → App Settings → Secrets.")
+        st.error("GEMINI_API_KEY not set — add it to Streamlit Cloud → App Settings → Secrets. Get a free key at aistudio.google.com")
         st.stop()
 
     with st.spinner(f"Fetching data for {chosen}…"):
@@ -205,7 +205,7 @@ if go and chosen:
             st.error(f"Could not fetch data: {exc}")
             st.stop()
 
-    # ── Metrics strip ──────────────────────────────────────────────────────────
+    # ── Metrics strip ────────────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
     c1d_c = "#00c896" if d["chg_1d"] >= 0 else "#ff4d6d"
     rsi_c = "#ff4d6d" if d["rsi"] > 70 else "#00c896" if d["rsi"] < 30 else "#f0b429"
@@ -239,18 +239,16 @@ if go and chosen:
         unsafe_allow_html=True,
     )
 
-    from anthropic import Anthropic
-    client = Anthropic(api_key=api_key)
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
     prompt_text = _build_prompt(chosen, d)
 
     def _stream():
-        with client.messages.stream(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt_text}],
-        ) as stream:
-            for chunk in stream.text_stream:
-                yield chunk
+        response = model.generate_content(prompt_text, stream=True)
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
 
     try:
         st.write_stream(_stream())

@@ -20,7 +20,7 @@ with st.sidebar:
     user_sidebar()
 
 
-# ── Sector fallback map ────────────────────────────────────────────────────────
+# ── Sector fallback map ─────────────────────────────────────────────────────
 
 _SECTOR = {
     "RELIANCE": "Energy", "ONGC": "Energy", "NTPC": "Utilities",
@@ -47,7 +47,7 @@ _SECTOR = {
 }
 
 
-# ── Cached helpers ─────────────────────────────────────────────────────────────
+# ── Cached helpers ──────────────────────────────────────────────────────────
 
 @st.cache_resource
 def _universe():
@@ -94,7 +94,7 @@ def _price_data(ticker_ns: str) -> dict:
     )
 
 
-# ── Prompt builder ─────────────────────────────────────────────────────────────
+# ── Prompt builder ───────────────────────────────────────────────────────────
 
 def _build_prompt(holdings: list, prices: dict) -> str:
     rows = []
@@ -180,7 +180,7 @@ Highlight 1–2 positions with strong momentum or good P&L. Keep it short.
 Use specific numbers from the data. Do not add generic disclaimers about seeking professional advice."""
 
 
-# ── Page ───────────────────────────────────────────────────────────────────────
+# ── Page ───────────────────────────────────────────────────────────────────
 
 st.markdown(
     '<div style="margin-bottom:4px;">'
@@ -200,7 +200,7 @@ if not uni:
 if "portfolio" not in st.session_state:
     st.session_state["portfolio"] = []
 
-# ── Add position form ──────────────────────────────────────────────────────────
+# ── Add position form ──────────────────────────────────────────────────────────────
 with st.expander("➕ Add Position", expanded=not st.session_state["portfolio"]):
     fa, fb, fc, fd = st.columns([4, 1, 2, 1])
     with fa:
@@ -235,7 +235,7 @@ if not holdings:
     st.info("Add at least one position above to get started.")
     st.stop()
 
-# ── Fetch live prices ──────────────────────────────────────────────────────────
+# ── Fetch live prices ───────────────────────────────────────────────────────────
 prices = {}
 failed = []
 with st.spinner("Fetching live prices…"):
@@ -251,7 +251,7 @@ with st.spinner("Fetching live prices…"):
 if failed:
     st.warning(f"Could not fetch live price for: {', '.join(failed)}. Using avg price.")
 
-# ── Summary metrics ────────────────────────────────────────────────────────────
+# ── Summary metrics ─────────────────────────────────────────────────────────────
 total_inv = sum(h["qty"] * h["avg_price"] for h in holdings)
 total_cur = sum(h["qty"] * prices[h["name"]]["price"] for h in holdings)
 total_pnl = total_cur - total_inv
@@ -280,7 +280,7 @@ for col, lbl, val, sub, clr in [
 
 st.markdown('<div style="margin:16px 0 8px;"></div>', unsafe_allow_html=True)
 
-# ── Holdings table ─────────────────────────────────────────────────────────────
+# ── Holdings table ─────────────────────────────────────────────────────────────────
 rows = []
 for h in holdings:
     pd_  = prices[h["name"]]
@@ -314,7 +314,7 @@ st.dataframe(
     },
 )
 
-# ── Remove positions ───────────────────────────────────────────────────────────
+# ── Remove positions ─────────────────────────────────────────────────────────────
 with st.expander("🗑️ Remove Positions"):
     to_remove = st.multiselect("Select stocks to remove",
                                [h["name"] for h in holdings],
@@ -335,24 +335,22 @@ st.markdown(
 run_btn = st.button("🤖 Run AI Portfolio Analysis", type="primary")
 
 if run_btn:
-    api_key = (os.environ.get("ANTHROPIC_API_KEY") or
-               st.secrets.get("ANTHROPIC_API_KEY", ""))
+    api_key = (os.environ.get("GEMINI_API_KEY") or
+               st.secrets.get("GEMINI_API_KEY", ""))
     if not api_key:
-        st.error("ANTHROPIC_API_KEY not set — add it to Streamlit Cloud → App Settings → Secrets.")
+        st.error("GEMINI_API_KEY not set — add it to Streamlit Cloud → App Settings → Secrets. Get a free key at aistudio.google.com")
         st.stop()
 
-    from anthropic import Anthropic
-    client = Anthropic(api_key=api_key)
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
     prompt_text = _build_prompt(holdings, prices)
 
     def _stream():
-        with client.messages.stream(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt_text}],
-        ) as stream:
-            for chunk in stream.text_stream:
-                yield chunk
+        response = model.generate_content(prompt_text, stream=True)
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
 
     try:
         st.write_stream(_stream())
