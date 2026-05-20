@@ -243,18 +243,12 @@ if go and chosen:
     client = Groq(api_key=api_key)
     prompt_text = _build_prompt(chosen, d)
 
-    placeholder = st.empty()
-    full_text = ""
     try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt_text}],
-            stream=True,
-        )
-        for chunk in response:
-            if chunk.choices[0].delta.content:
-                full_text += chunk.choices[0].delta.content
-                placeholder.markdown(full_text + "▌")
-        placeholder.markdown(full_text)
+        with st.spinner("Generating analysis…"):
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt_text}],
+            )
+        st.markdown(response.choices[0].message.content)
     except Exception as exc:
         st.error(f"AI analysis failed: {exc}")
