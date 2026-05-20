@@ -192,10 +192,10 @@ if go and chosen:
     if not ticker_ns.endswith(".NS"):
         ticker_ns += ".NS"
 
-    api_key = (os.environ.get("GEMINI_API_KEY") or
-               st.secrets.get("GEMINI_API_KEY", ""))
+    api_key = (os.environ.get("GROQ_API_KEY") or
+               st.secrets.get("GROQ_API_KEY", ""))
     if not api_key:
-        st.error("GEMINI_API_KEY not set — add it to Streamlit Cloud → App Settings → Secrets. Get a free key at aistudio.google.com")
+        st.error("GROQ_API_KEY not set — add it to Streamlit Cloud → App Settings → Secrets. Get a free key at console.groq.com")
         st.stop()
 
     with st.spinner(f"Fetching data for {chosen}…"):
@@ -239,16 +239,19 @@ if go and chosen:
         unsafe_allow_html=True,
     )
 
-    import google.generativeai as genai
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    from groq import Groq
+    client = Groq(api_key=api_key)
     prompt_text = _build_prompt(chosen, d)
 
     def _stream():
-        response = model.generate_content(prompt_text, stream=True)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt_text}],
+            stream=True,
+        )
         for chunk in response:
-            if chunk.text:
-                yield chunk.text
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
     try:
         st.write_stream(_stream())
