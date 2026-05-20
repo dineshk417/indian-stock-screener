@@ -345,7 +345,9 @@ if run_btn:
     client = Groq(api_key=api_key)
     prompt_text = _build_prompt(holdings, prices)
 
-    def _stream():
+    placeholder = st.empty()
+    full_text = ""
+    try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt_text}],
@@ -353,9 +355,8 @@ if run_btn:
         )
         for chunk in response:
             if chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-
-    try:
-        st.write_stream(_stream())
+                full_text += chunk.choices[0].delta.content
+                placeholder.markdown(full_text + "▌")
+        placeholder.markdown(full_text)
     except Exception as exc:
         st.error(f"AI analysis failed: {exc}")
