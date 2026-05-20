@@ -186,9 +186,18 @@ st.markdown(
     '<div style="margin-bottom:4px;">'
     '<span style="font-size:1.55rem;font-weight:900;color:#f1f5f9;letter-spacing:-0.03em;">'
     '📊 Portfolio Health Check</span></div>'
-    '<div style="font-size:0.8rem;color:#64748b;margin-bottom:24px;">'
+    '<div style="font-size:0.8rem;color:#64748b;margin-bottom:16px;">'
     'Enter your holdings and get AI feedback — sector concentration, '
-    'positions at risk &amp; a plain-English verdict on what to do next.</div>',
+    'positions at risk &amp; a plain-English verdict on what to do next.</div>'
+    '<div style="display:flex;gap:8px;margin-bottom:24px;">'
+    '<a href="/AI_Analyst" style="flex:1;text-align:center;padding:9px 16px;'
+    'background:rgba(255,255,255,0.05);color:#64748b;border-radius:8px;'
+    'text-decoration:none;font-weight:700;font-size:0.78rem;letter-spacing:0.03em;'
+    'border:1px solid rgba(255,255,255,0.07);">🤖 AI Stock Analyst</a>'
+    '<a href="/Portfolio_Health" style="flex:1;text-align:center;padding:9px 16px;'
+    'background:#22c55e;color:#fff;border-radius:8px;text-decoration:none;'
+    'font-weight:700;font-size:0.78rem;letter-spacing:0.03em;">📊 Portfolio Health</a>'
+    '</div>',
     unsafe_allow_html=True,
 )
 
@@ -351,6 +360,31 @@ if run_btn:
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "user", "content": prompt_text}],
             )
-        st.markdown(response.choices[0].message.content)
+        st.markdown("""<style>
+[data-testid="stVerticalBlockBorderWrapper"]{
+    background:linear-gradient(145deg,#1a1f35,#141828)!important;
+    border-color:rgba(255,255,255,0.08)!important;
+    border-radius:12px!important;
+}
+[data-testid="stVerticalBlockBorderWrapper"] h2{
+    color:#22c55e!important;font-size:0.72rem!important;font-weight:800!important;
+    text-transform:uppercase;letter-spacing:0.1em;
+    border-bottom:1px solid rgba(34,197,94,0.2);padding-bottom:6px;margin-top:1.4rem;
+}
+[data-testid="stVerticalBlockBorderWrapper"] h2:first-child{margin-top:0.4rem;}
+[data-testid="stVerticalBlockBorderWrapper"] p,
+[data-testid="stVerticalBlockBorderWrapper"] li{color:#cbd5e1;line-height:1.75;}
+[data-testid="stVerticalBlockBorderWrapper"] strong{color:#f1f5f9;}
+[data-testid="stVerticalBlockBorderWrapper"] table{width:100%;border-collapse:collapse;margin:8px 0;}
+[data-testid="stVerticalBlockBorderWrapper"] th,
+[data-testid="stVerticalBlockBorderWrapper"] td{
+    border:1px solid rgba(255,255,255,0.07);padding:8px 14px;font-size:0.85rem;
+}
+[data-testid="stVerticalBlockBorderWrapper"] tr:nth-child(even) td{
+    background:rgba(255,255,255,0.02);
+}
+</style>""", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(response.choices[0].message.content)
     except Exception as exc:
         st.error(f"AI analysis failed: {exc}")
