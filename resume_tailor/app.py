@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="Resume Tailor",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.title("📄 Resume Tailor")
@@ -180,6 +180,31 @@ with tab_cover:
 with st.sidebar:
     st.markdown("### Resume Tailor")
     st.caption("Powered by Groq · llama-3.3-70b · Free")
+
+    _has_key = bool(os.environ.get("GROQ_API_KEY"))
+    if not _has_key:
+        try:
+            _has_key = bool(st.secrets.get("GROQ_API_KEY"))
+        except Exception:
+            pass
+
+    if not _has_key:
+        st.markdown("---")
+        st.markdown("**🔑 Groq API Key**")
+        typed_key = st.text_input(
+            "Paste your Groq API key",
+            type="password",
+            key="_groq_key_input",
+            placeholder="gsk_...",
+            help="Get a free key at console.groq.com",
+        )
+        if typed_key:
+            st.session_state["_groq_key"] = typed_key
+            st.success("✅ Key saved for this session.")
+        else:
+            st.caption("[Get a free key →](https://console.groq.com)")
+
+    st.markdown("---")
     with st.expander("How it works"):
         st.markdown(
             "1. Upload or paste your resume.\n"
@@ -189,5 +214,3 @@ with st.sidebar:
             "5. A tailored cover letter is generated automatically.\n"
             "6. Download both as editable .docx files."
         )
-    st.markdown("---")
-    st.markdown("[Get a free Groq API key →](https://console.groq.com)")

@@ -6,16 +6,33 @@ from groq import Groq
 _MODEL = "llama-3.3-70b-versatile"
 
 
+def _resolve_api_key() -> str:
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        try:
+            key = st.secrets["GROQ_API_KEY"]
+        except Exception:
+            pass
+    if not key:
+        key = st.session_state.get("_groq_key", "")
+    return key.strip()
+
+
 @st.cache_resource
-def get_client() -> Groq:
-    api_key = os.environ.get("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY not set — add it to .env or Streamlit secrets.")
+def get_client(api_key: str) -> Groq:
     return Groq(api_key=api_key)
 
 
 def _chat(system: str, user: str, temperature: float, max_tokens: int) -> str:
-    client = get_client()
+    api_key = _resolve_api_key()
+    if not api_key:
+        st.error(
+            "**GROQ_API_KEY not set.** "
+            "Paste your free key in the sidebar to continue. "
+            "Get one at https://console.groq.com"
+        )
+        st.stop()
+    client = get_client(api_key)
     response = client.chat.completions.create(
         model=_MODEL,
         messages=[
