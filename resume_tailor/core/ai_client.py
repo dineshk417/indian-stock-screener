@@ -77,6 +77,27 @@ def generate_cover_letter(resume_text: str, jd_text: str, company_name: str) -> 
     return _chat(system, user, temperature=0.5, max_tokens=1024)
 
 
+def incorporate_keywords(resume_text: str, missing_keywords: list[str]) -> str:
+    kw_list = ", ".join(missing_keywords)
+    system = (
+        "You are an expert resume writer. Your task is to integrate missing keywords "
+        "into an existing resume naturally and credibly.\n\n"
+        "Rules:\n"
+        "- Only add keywords that are genuinely plausible given the candidate's existing background.\n"
+        "- Weave keywords into existing bullet points, the skills section, or the summary — do not invent fake jobs or fake experience.\n"
+        "- If a keyword cannot be added credibly, skip it silently.\n"
+        "- Preserve all section headers, formatting, and original content.\n"
+        "- Output ONLY the updated resume text — no preamble, no commentary."
+    )
+    user = (
+        f"MISSING KEYWORDS TO INCORPORATE:\n{kw_list}\n\n"
+        f"CURRENT RESUME:\n{resume_text}\n\n"
+        "Integrate as many of the missing keywords as possible into the resume naturally. "
+        "Output the complete updated resume only."
+    )
+    return _chat(system, user, temperature=0.3, max_tokens=4096)
+
+
 def extract_ats_keywords(jd_text: str) -> list[str]:
     system = "You are an ATS (Applicant Tracking System) specialist. Extract important keywords from job descriptions."
     user = (

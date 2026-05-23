@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from core.extractor import extract_text_from_upload
-from core.ai_client import tailor_resume, generate_cover_letter, extract_ats_keywords
+from core.ai_client import tailor_resume, generate_cover_letter, extract_ats_keywords, incorporate_keywords
 from core.ats_scorer import compute_ats_scores
 from core.docx_builder import text_to_docx_bytes
 from core.scraper import scrape_job_url
@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="Resume Tailor",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.title("📄 Resume Tailor")
@@ -145,6 +145,18 @@ with tab_resume:
         with c2:
             st.markdown("**❌ Missing keywords**")
             keyword_chips(ats["after"]["missing"], "#e74c3c")
+
+        missing = ats["after"]["missing"]
+        if missing:
+            if st.button("🔧 Incorporate missing keywords into resume", use_container_width=True):
+                with st.spinner(f"Weaving in {len(missing)} missing keywords…"):
+                    updated = incorporate_keywords(st.session_state["tailored_resume"], missing)
+                st.session_state["tailored_resume"] = updated
+                new_ats = compute_ats_scores(
+                    st.session_state["resume_raw"], updated, st.session_state["jd_keywords"]
+                )
+                st.session_state["ats_scores"] = new_ats
+                st.rerun()
 
         st.divider()
         section_header("Tailored Resume", "Edit below before downloading")
