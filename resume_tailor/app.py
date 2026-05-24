@@ -5,7 +5,8 @@ import streamlit as st
 from core.extractor import extract_text_from_upload
 from core.ai_client import tailor_resume, generate_cover_letter, extract_ats_keywords, incorporate_keywords, parse_resume_to_structure
 from core.ats_scorer import compute_ats_scores
-from core.docx_builder import text_to_docx_bytes, build_resume_docx
+from core.docx_builder import text_to_docx_bytes
+from core.pdf_builder import build_resume_pdf
 from core.scraper import scrape_job_url
 from ui.components import score_gauge, keyword_chips, section_header
 
@@ -116,9 +117,9 @@ with tab_inputs:
         with st.spinner("Writing cover letter…"):
             cover = generate_cover_letter(resume_text, jd_text, company)
 
-        with st.spinner("Formatting resume document…"):
+        with st.spinner("Building formatted PDF…"):
             structure = parse_resume_to_structure(tailored)
-            resume_docx = build_resume_docx(structure)
+            resume_pdf = build_resume_pdf(structure)
 
         ats = compute_ats_scores(resume_text, tailored, keywords)
 
@@ -127,7 +128,7 @@ with tab_inputs:
             "jd_raw": jd_text,
             "tailored_resume": tailored,
             "resume_structure": structure,
-            "resume_docx": resume_docx,
+            "resume_pdf": resume_pdf,
             "cover_letter": cover,
             "jd_keywords": keywords,
             "ats_scores": ats,
@@ -159,12 +160,12 @@ with tab_resume:
             if st.button("🔧 Incorporate missing keywords into resume", use_container_width=True):
                 with st.spinner(f"Weaving in {len(missing)} missing keywords…"):
                     updated = incorporate_keywords(st.session_state["tailored_resume"], missing)
-                with st.spinner("Reformatting document…"):
+                with st.spinner("Rebuilding PDF…"):
                     structure = parse_resume_to_structure(updated)
-                    resume_docx = build_resume_docx(structure)
+                    resume_pdf = build_resume_pdf(structure)
                 st.session_state["tailored_resume"] = updated
                 st.session_state["resume_structure"] = structure
-                st.session_state["resume_docx"] = resume_docx
+                st.session_state["resume_pdf"] = resume_pdf
                 new_ats = compute_ats_scores(
                     st.session_state["resume_raw"], updated, st.session_state["jd_keywords"]
                 )
@@ -172,16 +173,16 @@ with tab_resume:
                 st.rerun()
 
         st.divider()
-        section_header("Tailored Resume", "Edit or review below · download as formatted .docx")
+        section_header("Tailored Resume", "Review below · download as formatted PDF")
         st.text_area(
             "Tailored resume", value=st.session_state["tailored_resume"],
             height=500, key="edited_resume", label_visibility="collapsed",
         )
         st.download_button(
-            "⬇️ Download Formatted Resume (.docx)",
-            data=st.session_state["resume_docx"],
-            file_name="tailored_resume.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "⬇️ Download Resume as PDF",
+            data=st.session_state["resume_pdf"],
+            file_name="tailored_resume.pdf",
+            mime="application/pdf",
             use_container_width=True,
             type="primary",
         )
