@@ -3,9 +3,9 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from core.extractor import extract_text_from_upload
-from core.ai_client import tailor_resume, generate_cover_letter, extract_ats_keywords, incorporate_keywords
+from core.ai_client import tailor_resume, generate_cover_letter, extract_ats_keywords, incorporate_keywords, parse_resume_to_structure
 from core.ats_scorer import compute_ats_scores
-from core.docx_builder import text_to_docx_bytes
+from core.docx_builder import text_to_docx_bytes, build_resume_docx
 from core.scraper import scrape_job_url
 from ui.components import score_gauge, keyword_chips, section_header
 
@@ -61,6 +61,7 @@ with tab_inputs:
 
     st.divider()
     if st.button("🚀 Tailor My Resume", type="primary", use_container_width=True):
+        # --- resolve resume ---
         try:
             if resume_mode == "Upload file":
                 f = st.session_state.get("resume_file")
@@ -77,6 +78,7 @@ with tab_inputs:
             st.error(f"Could not read resume: {e}")
             st.stop()
 
+        # --- resolve JD ---
         try:
             if jd_mode == "Upload file":
                 f = st.session_state.get("jd_file")
@@ -114,12 +116,18 @@ with tab_inputs:
         with st.spinner("Writing cover letter…"):
             cover = generate_cover_letter(resume_text, jd_text, company)
 
+        with st.spinner("Formatting resume document…"):
+            structure = parse_resume_to_structure(tailored)
+            resume_docx = build_resume_docx(structure)
+
         ats = compute_ats_scores(resume_text, tailored, keywords)
 
         st.session_state.update({
             "resume_raw": resume_text,
             "jd_raw": jd_text,
             "tailored_resume": tailored,
+            "resume_structure": structure,
+            "resume_docx": resume_docx,
             "cover_letter": cover,
             "jd_keywords": keywords,
             "ats_scores": ats,
@@ -151,7 +159,12 @@ with tab_resume:
             if st.button("🔧 Incorporate missing keywords into resume", use_container_width=True):
                 with st.spinner(f"Weaving in {len(missing)} missing keywords…"):
                     updated = incorporate_keywords(st.session_state["tailored_resume"], missing)
+                with st.spinner("Reformatting document…"):
+                    structure = parse_resume_to_structure(updated)
+                    resume_docx = build_resume_docx(structure)
                 st.session_state["tailored_resume"] = updated
+                st.session_state["resume_structure"] = structure
+                st.session_state["resume_docx"] = resume_docx
                 new_ats = compute_ats_scores(
                     st.session_state["resume_raw"], updated, st.session_state["jd_keywords"]
                 )
@@ -159,17 +172,18 @@ with tab_resume:
                 st.rerun()
 
         st.divider()
-        section_header("Tailored Resume", "Edit below before downloading")
-        edited_resume = st.text_area(
+        section_header("Tailored Resume", "Edit or review below · download as formatted .docx")
+        st.text_area(
             "Tailored resume", value=st.session_state["tailored_resume"],
-            height=600, key="edited_resume", label_visibility="collapsed",
+            height=500, key="edited_resume", label_visibility="collapsed",
         )
         st.download_button(
-            "⬇️ Download Tailored Resume (.docx)",
-            data=text_to_docx_bytes(edited_resume, title="Tailored Resume"),
+            "⬇️ Download Formatted Resume (.docx)",
+            data=st.session_state["resume_docx"],
             file_name="tailored_resume.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
+            type="primary",
         )
 
 with tab_cover:
@@ -193,13 +207,11 @@ with st.sidebar:
     st.markdown("### Resume Tailor")
     st.caption("Powered by Groq · llama-3.3-70b · Free")
 
-    _has_key = bool(os.environ.get("GROQ_API_KEY"))
-    if not _has_key:
-        try:
-            _has_key = bool(st.secrets.get("GROQ_API_KEY"))
-        except Exception:
-            pass
-
+    # Show API key input only if not already configured via secrets/env
+    _has_key = bool(
+        os.environ.get("GROQ_API_KEY")
+        or (lambda: (st.secrets.get("GROQ_API_KEY") if hasattr(st, "secrets") else None))()
+    )
     if not _has_key:
         st.markdown("---")
         st.markdown("**🔑 Groq API Key**")
@@ -212,7 +224,7 @@ with st.sidebar:
         )
         if typed_key:
             st.session_state["_groq_key"] = typed_key
-            st.success("✅ Key saved for this session.")
+            st.success("Key saved for this session.")
         else:
             st.caption("[Get a free key →](https://console.groq.com)")
 

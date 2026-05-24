@@ -76,6 +76,51 @@ def generate_cover_letter(resume_text: str, jd_text: str, company_name: str) -> 
     user = f"JOB DESCRIPTION:\n{jd_text}\n\nRESUME:\n{resume_text}\n\n{company_note}\n\nWrite the cover letter body."
     return _chat(system, user, temperature=0.5, max_tokens=1024)
 
+def parse_resume_to_structure(resume_text: str) -> dict:
+    system = (
+        "You are a resume parser. Convert a plain-text resume into a strict JSON structure.\n"
+        "Output ONLY valid JSON — no prose, no markdown fences, no comments.\n\n"
+        "Required schema:\n"
+        "{\n"
+        '  "name": "Full Name",\n'
+        '  "contact": ["email", "phone", "location", "linkedin or github (if present)"],\n'
+        '  "summary": "Professional summary paragraph or empty string",\n'
+        '  "sections": [\n'
+        "    {\n"
+        '      "title": "Experience",\n'
+        '      "type": "entries",\n'
+        '      "entries": [{"role":"","org":"","duration":"","location":"","bullets":[]}]\n'
+        "    },\n"
+        "    {\n"
+        '      "title": "Skills",\n'
+        '      "type": "skills",\n'
+        '      "categories": [{"label":"Languages","items":"Python, SQL"},{"label":"Cloud","items":"AWS, GCP"}]\n'
+        "    },\n"
+        "    {\n"
+        '      "title": "Education",\n'
+        '      "type": "entries",\n'
+        '      "entries": [{"role":"Degree","org":"University","duration":"","location":"","bullets":[]}]\n'
+        "    }\n"
+        "  ]\n"
+        "}\n\n"
+        "Rules:\n"
+        "- Use type='entries' for Experience, Education, Projects, Certifications.\n"
+        "- Use type='skills' for Skills/Technical Skills sections; group into sensible categories.\n"
+        "- Use type='text' with a 'content' string for any other section.\n"
+        "- Preserve all bullet point text exactly as written.\n"
+        "- If a field is unknown leave it as an empty string, never omit the key."
+    )
+    user = f"Parse this resume into the JSON schema:\n\n{resume_text}"
+    raw = _chat(system, user, temperature=0.1, max_tokens=4096)
+    try:
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        import json
+        return json.loads(raw[start:end])
+    except Exception:
+        return {"name": "", "contact": [], "summary": "", "sections": [],
+                "_raw": resume_text}
+
 
 def incorporate_keywords(resume_text: str, missing_keywords: list[str]) -> str:
     kw_list = ", ".join(missing_keywords)
