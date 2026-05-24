@@ -1,9 +1,11 @@
 import json
 import os
+import time
 import streamlit as st
-from groq import Groq
+from groq import Groq, RateLimitError
 
 _MODEL = "llama-3.3-70b-versatile"
+_FAST_MODEL = "llama-3.1-8b-instant"  # higher rate limits, used for structured parsing
 
 
 def _resolve_api_key() -> str:
@@ -23,7 +25,8 @@ def get_client(api_key: str) -> Groq:
     return Groq(api_key=api_key)
 
 
-def _chat(system: str, user: str, temperature: float, max_tokens: int) -> str:
+def _chat(system: str, user: str, temperature: float, max_tokens: int,
+          model: str = _MODEL) -> str:
     api_key = _resolve_api_key()
     if not api_key:
         st.error(
@@ -33,16 +36,27 @@ def _chat(system: str, user: str, temperature: float, max_tokens: int) -> str:
         )
         st.stop()
     client = get_client(api_key)
-    response = client.chat.completions.create(
-        model=_MODEL,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    return response.choices[0].message.content.strip()
+    for attempt in range(4):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content.strip()
+        except RateLimitError:
+            if attempt == 3:
+                st.error(
+                    "Groq rate limit hit. Wait 30 seconds and try again, "
+                    "or upgrade to a paid Groq plan for higher limits."
+                )
+                st.stop()
+            wait = 2 ** (attempt + 2)   # 4s, 8s, 16s
+            time.sleep(wait)
 
 
 def tailor_resume(resume_text: str, jd_text: str) -> str:
@@ -57,8 +71,12 @@ def tailor_resume(resume_text: str, jd_text: str) -> str:
         "- Preserve all section headers (Summary, Experience, Education, Skills, etc.).\n"
         "- Output ONLY the resume text — no preamble, no commentary, no markdown fences."
     )
-    user = f"JOB DESCRIPTION:\n{jd_text}\n\nORIGINAL RESUME:\n{resume_text}\n\nRewrite the resume to match the job description. Output the complete tailored resume only."
-    return _chat(system, user, temperature=0.3, max_tokens=4096)
+    user = (
+        f"JOB DESCRIPTION:\n{jd_text}\n\n"
+        f"ORIGINAL RESUME:\n{resume_text}\n\n"
+        "Rewrite the resume to match the job description. Output the complete tailored resume only."
+    )
+    return _chat(system, user, temperature=0.3, max_tokens=3000)
 
 
 def generate_cover_letter(resume_text: str, jd_text: str, company_name: str) -> str:
@@ -74,86 +92,66 @@ def generate_cover_letter(resume_text: str, jd_text: str, company_name: str) -> 
         "- Plain text only, no markdown."
     )
     user = f"JOB DESCRIPTION:\n{jd_text}\n\nRESUME:\n{resume_text}\n\n{company_note}\n\nWrite the cover letter body."
-    return _chat(system, user, temperature=0.5, max_tokens=1024)
+    return _chat(system, user, temperature=0.5, max_tokens=800)
+
 
 def parse_resume_to_structure(resume_text: str) -> dict:
     system = (
         "You are a resume parser. Convert a plain-text resume into a strict JSON structure.\n"
         "Output ONLY valid JSON — no prose, no markdown fences, no comments.\n\n"
         "Required schema:\n"
-        "{\n"
-        '  "name": "Full Name",\n'
-        '  "contact": ["email", "phone", "location", "linkedin or github (if present)"],\n'
-        '  "summary": "Professional summary paragraph or empty string",\n'
-        '  "sections": [\n'
-        "    {\n"
-        '      "title": "Experience",\n'
-        '      "type": "entries",\n'
-        '      "entries": [{"role":"","org":"","duration":"","location":"","bullets":[]}]\n'
-        "    },\n"
-        "    {\n"
-        '      "title": "Skills",\n'
-        '      "type": "skills",\n'
-        '      "categories": [{"label":"Languages","items":"Python, SQL"},{"label":"Cloud","items":"AWS, GCP"}]\n'
-        "    },\n"
-        "    {\n"
-        '      "title": "Education",\n'
-        '      "type": "entries",\n'
-        '      "entries": [{"role":"Degree","org":"University","duration":"","location":"","bullets":[]}]\n'
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
+        '{"name":"Full Name","contact":["email","phone","location","linkedin"],'
+        '"summary":"summary text or empty string","sections":['
+        '{"title":"Experience","type":"entries","entries":[{"role":"","org":"","duration":"","location":"","bullets":[]}]},'
+        '{"title":"Skills","type":"skills","categories":[{"label":"Languages","items":"Python, SQL"}]},'
+        '{"title":"Education","type":"entries","entries":[{"role":"Degree","org":"University","duration":"","location":"","bullets":[]}]}'
+        "]}\n\n"
         "Rules:\n"
-        "- Use type='entries' for Experience, Education, Projects, Certifications.\n"
-        "- Use type='skills' for Skills/Technical Skills sections; group into sensible categories.\n"
-        "- Use type='text' with a 'content' string for any other section.\n"
-        "- Preserve all bullet point text exactly as written.\n"
-        "- If a field is unknown leave it as an empty string, never omit the key."
+        "- type='entries' for Experience, Education, Projects, Certifications.\n"
+        "- type='skills' for Skills sections; group into concise categories.\n"
+        "- type='text' with 'content' key for any other section.\n"
+        "- Preserve bullet text exactly. Empty string for unknown fields, never omit keys."
     )
-    user = f"Parse this resume into the JSON schema:\n\n{resume_text}"
-    raw = _chat(system, user, temperature=0.1, max_tokens=4096)
+    user = f"Parse this resume:\n\n{resume_text}"
+    raw = _chat(system, user, temperature=0.1, max_tokens=2500, model=_FAST_MODEL)
     try:
         start = raw.find("{")
         end = raw.rfind("}") + 1
-        import json
         return json.loads(raw[start:end])
     except Exception:
-        return {"name": "", "contact": [], "summary": "", "sections": [],
-                "_raw": resume_text}
+        return {"name": "", "contact": [], "summary": resume_text, "sections": []}
 
 
 def incorporate_keywords(resume_text: str, missing_keywords: list[str]) -> str:
     kw_list = ", ".join(missing_keywords)
     system = (
-        "You are an expert resume writer. Your task is to integrate missing keywords "
-        "into an existing resume naturally and credibly.\n\n"
+        "You are an expert resume writer. Integrate missing keywords into an existing resume naturally.\n\n"
         "Rules:\n"
-        "- Only add keywords that are genuinely plausible given the candidate's existing background.\n"
-        "- Weave keywords into existing bullet points, the skills section, or the summary — do not invent fake jobs or fake experience.\n"
-        "- If a keyword cannot be added credibly, skip it silently.\n"
+        "- Only add keywords plausible given the candidate's existing background.\n"
+        "- Weave them into existing bullets, the skills section, or the summary — never invent experience.\n"
+        "- Skip keywords that cannot be added credibly.\n"
         "- Preserve all section headers, formatting, and original content.\n"
         "- Output ONLY the updated resume text — no preamble, no commentary."
     )
     user = (
-        f"MISSING KEYWORDS TO INCORPORATE:\n{kw_list}\n\n"
+        f"MISSING KEYWORDS:\n{kw_list}\n\n"
         f"CURRENT RESUME:\n{resume_text}\n\n"
-        "Integrate as many of the missing keywords as possible into the resume naturally. "
-        "Output the complete updated resume only."
+        "Integrate the keywords naturally. Output the complete updated resume only."
     )
-    return _chat(system, user, temperature=0.3, max_tokens=4096)
+    return _chat(system, user, temperature=0.3, max_tokens=3000)
 
 
 def extract_ats_keywords(jd_text: str) -> list[str]:
-    system = "You are an ATS (Applicant Tracking System) specialist. Extract important keywords from job descriptions."
+    system = "You are an ATS specialist. Extract important keywords from job descriptions."
     user = (
         "Extract the top 30–40 ATS keywords from the job description below.\n"
-        "Include: required skills, tools, technologies, certifications, methodologies, role-specific terminology.\n"
-        "Exclude: company name, generic words (team, work, company), and stop words.\n"
+        "Include: skills, tools, technologies, certifications, methodologies, role-specific terms.\n"
+        "Exclude: company name, generic words, stop words.\n"
         'Output ONLY a JSON array of lowercase strings. No prose, no fences.\n'
         'Example: ["python", "machine learning", "aws", "sql", "agile"]\n\n'
         f"JOB DESCRIPTION:\n{jd_text}"
     )
-    raw = _chat(system, user, temperature=0.1, max_tokens=512)
+    raw = _chat(system, user, temperature=0.1, max_tokens=400, model=_FAST_MODEL)
     try:
         start = raw.find("[")
         end = raw.rfind("]") + 1
