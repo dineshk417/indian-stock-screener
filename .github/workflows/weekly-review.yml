@@ -1,0 +1,38 @@
+name: 📊 Weekly Performance Review
+
+# Every Friday at 4 PM IST (10:30 UTC).
+# Also triggerable manually from the Actions tab.
+
+on:
+  schedule:
+    - cron: '30 10 * * 5'   # 16:00 IST every Friday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Weekly Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install groq psycopg2-binary
+
+      - name: Run weekly review
+        env:
+          GROQ_API_KEY:          ${{ secrets.GROQ_API_KEY }}
+          DATABASE_URL:          ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID:   ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        run: python scripts/weekly_review.py
