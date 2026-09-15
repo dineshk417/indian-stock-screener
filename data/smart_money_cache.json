@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-14T08:28:59.763330+00:00",
+  "updated_at": "2026-09-15T08:19:37.593329+00:00",
   "bulk_block_deals": [
     {
       "date": "2026-09-11",
@@ -3049,6 +3049,20 @@
   ],
   "fii_dii_flow": [
     {
+      "buy_cr": 15109.58,
+      "category": "DII",
+      "date": "2026-09-11",
+      "net_cr": 1968.17,
+      "sell_cr": 13141.41
+    },
+    {
+      "buy_cr": 12616.89,
+      "category": "FII/FPI",
+      "date": "2026-09-11",
+      "net_cr": -930.9,
+      "sell_cr": 13547.79
+    },
+    {
       "buy_cr": 14678.53,
       "category": "DII",
       "date": "2026-09-08",
@@ -3634,7 +3648,7 @@
   "summary": {
     "bulk_count": 218,
     "block_count": 39,
-    "fii_rows": 6,
+    "fii_rows": 8,
     "insider_count": 45
   }
 }
